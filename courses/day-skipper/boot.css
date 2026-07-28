@@ -1,0 +1,17 @@
+/* day-skipper — how its loading screen moves. Its own keyframes: the animation
+ * vocabulary belongs to the course, not to Munin's stylesheet, or a course
+ * could only ever pick from the two names app.css happened to declare.
+ *
+ * The draw is .6s to fit under the 800ms the splash is held for (SPLASH.hold
+ * in munin.js): the drawing finishes drawing itself before the screen fades. */
+.boot-day-skipper { width: 52px; height: 52px; color: var(--accent);
+  animation: boot-day-skipper-move 2.2s ease-in-out infinite; }
+.boot-day-skipper path { stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: boot-day-skipper-draw .6s ease-out forwards; }
+@keyframes boot-day-skipper-draw { to { stroke-dashoffset: 0; } }
+@keyframes boot-day-skipper-move { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+/* Reduced motion leaves the drawing finished, not half-drawn. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-day-skipper, .boot-day-skipper path { animation: none; }
+  .boot-day-skipper path { stroke-dashoffset: 0; }
+}

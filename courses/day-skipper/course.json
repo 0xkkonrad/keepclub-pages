@@ -1,0 +1,154 @@
+{
+ "id": "day-skipper",
+ "title": "RYA Day Skipper",
+ "short": "Day Skipper",
+ "tagline": "theory deck",
+ "accent": {
+  "light": "#3a30d8",
+  "dark": "#9d95ff",
+  "inkLight": "#fffdf7",
+  "inkDark": "#141519"
+ },
+ "boot": {
+  "art": "boat",
+  "line": "Loading deck…"
+ },
+ "fallback": "boat",
+ "shelfArt": "boat",
+ "sectionArt": {
+  "terms": "boat",
+  "ropework": "knot",
+  "anchoring": "anchor",
+  "safety": "lifering",
+  "colregs": "crossing",
+  "lights": "lamp",
+  "sound": "horn",
+  "position": "dividers",
+  "charts": "chart",
+  "compass": "compass",
+  "chartwork": "plotter",
+  "tides": "wave",
+  "streams": "current",
+  "buoyage": "buoy",
+  "lightchar": "flash",
+  "meteo": "cloud",
+  "pilotage": "lighthouse",
+  "fog": "fogbank",
+  "emergencies": "flare",
+  "engine": "propeller",
+  "handling": "wheel",
+  "passage": "route",
+  "electronics": "radar",
+  "environment": "fish"
+ },
+ "groupArt": {
+  "hull": "wheel",
+  "rules": "crossing",
+  "fix": "dividers",
+  "weather": "moon",
+  "landfall": "lighthouse",
+  "trouble": "flare",
+  "plan": "route"
+ },
+ "friezeArt": [
+  "boat",
+  "buoy",
+  "gull",
+  "wave",
+  "lighthouse",
+  "anchor",
+  "fish",
+  "knot",
+  "flag",
+  "compass"
+ ],
+ "notice": "Revision material, not a substitute for the course, the current almanac or an up-to-date chart. Progress is stored on this device only.",
+ "figures": {
+  "noPen": [
+   "f-sail",
+   "f-fender",
+   "f-jack",
+   "f-wash"
+  ]
+ },
+ "credit": {
+  "name": "Maritime Master",
+  "href": "https://www.tiktok.com/@maritimemaster"
+ },
+ "hoard": {
+  "title": "Ship's log",
+  "items": {
+   "cast-off": {
+    "t": "cast off",
+    "d": "answered your first card",
+    "art": "boat"
+   },
+   "underway": {
+    "t": "underway",
+    "d": "50 cards answered",
+    "art": "wave"
+   },
+   "offshore": {
+    "t": "offshore",
+    "d": "250 cards answered",
+    "art": "lighthouse"
+   },
+   "blue-water": {
+    "t": "blue water",
+    "d": "1,000 cards answered",
+    "art": "chart"
+   },
+   "streak-3": {
+    "t": "three days running",
+    "d": "studied three days in a row",
+    "art": "gull"
+   },
+   "streak-7": {
+    "t": "a week at sea",
+    "d": "seven days in a row",
+    "art": "anchor"
+   },
+   "streak-14": {
+    "t": "salt in the veins",
+    "d": "fourteen days in a row",
+    "art": "compass"
+   },
+   "clean-run": {
+    "t": "clean run",
+    "d": "20 in a row without an again",
+    "art": "flag"
+   },
+   "night-watch": {
+    "t": "night watch",
+    "d": "answered a card between midnight and four",
+    "art": "moon"
+   },
+   "dawn-patrol": {
+    "t": "dawn patrol",
+    "d": "answered a card before six in the morning",
+    "art": "sun"
+   },
+   "all-sections": {
+    "t": "round the buoys",
+    "d": "started every section in the deck",
+    "art": "wheel"
+   },
+   "section-swept": {
+    "t": "section swept",
+    "d": "seen every card in one section",
+    "art": "buoy"
+   },
+   "knot-untangled": {
+    "t": "knot untangled",
+    "d": "a card that kept slipping is solid again",
+    "art": "knot"
+   },
+   "deck-met": {
+    "t": "every card met",
+    "d": "seen every card in the deck at least once",
+    "art": "fish"
+   }
+  }
+ },
+ "shelfPath": "M3.2 22.6C3.9 22.6 6.1 22.6 7.4 22.7C8.7 22.9 9.8 23.3 11.1 23.6C12.4 23.9 13.8 24.3 15.1 24.6C16.5 24.8 17.8 25.1 19 25.1C20.3 25.1 21.4 25 22.6 24.7C23.7 24.3 24.9 23.8 26 23.2L29.4 21.3L28.6 22.2C28.1 23 26.8 24.8 25.9 25.6C25.1 26.5 24.3 27 23.3 27.3C22.4 27.6 21.4 27.3 20.2 27.5C19 27.6 17.5 27.9 16.1 28C14.7 28.1 13.1 28.3 11.8 28.2C10.5 28.1 9.3 27.9 8.2 27.4C7.1 26.9 6.1 26.3 5.3 25.5C4.5 24.7 3.5 23 3.2 22.6C2.8 22.1 2.5 22.5 3.2 22.6ZM15.4 3C15.3 3.4 15.3 4.4 15.3 5C15.4 5.7 15.5 6.4 15.6 7C15.6 7.7 15.8 8.3 15.8 9C15.9 9.6 15.9 10.1 15.9 10.7C15.9 11.3 15.8 12 15.7 12.6C15.7 13.3 15.7 13.9 15.8 14.6C15.9 15.2 16.1 15.8 16.1 16.5C16.2 17.2 16.3 18.1 16.3 18.8C16.4 19.5 16.5 20.1 16.5 20.7C16.6 21.3 16.7 22.1 16.7 22.4M16.7 5.8C17.2 6.2 19 7.4 19.9 8.3C20.8 9.2 21.5 10.3 22.2 11.4C22.9 12.5 23.7 13.8 24.2 14.8C24.8 15.9 25.3 16.9 25.6 17.9C25.8 19 25.8 20.6 25.9 21.3L25.7 22.2L23.6 22.3C22.6 22.4 20.4 22.7 19.5 22.7L18 22.5L18.2 20.5C18.2 19.6 18.2 18.5 18.2 17.3C18.1 16.1 17.9 14.7 17.8 13.4C17.6 12.2 17.6 10.9 17.5 9.6C17.3 8.3 16.8 6.4 16.7 5.8C16.6 5.2 16.2 5.4 16.7 5.8ZM13.5 8.4C13.1 8.7 11.9 9.5 11.3 10.1C10.7 10.8 10.1 11.5 9.7 12.3C9.3 13 9 13.9 8.9 14.8C8.7 15.6 8.7 16.4 8.7 17.3C8.6 18.2 8.7 19.6 8.7 20.2L8.8 21.1L10.7 20.6C11.5 20.7 13 21.2 13.7 21.4L14.8 21.8L14.9 19.9C14.9 19.1 14.7 17.9 14.6 16.9C14.4 16 14.3 15.1 14.1 14.1C14 13.2 13.8 12.2 13.7 11.3C13.6 10.3 13.5 8.9 13.5 8.4C13.5 8 13.9 8.2 13.5 8.4Z"
+}

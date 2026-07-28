@@ -1,0 +1,1336 @@
+/* Munin — the app's own stylesheet, in the "Deck Doodle × Signal Flags"
+ * language it was drawn in for Day Skipper.
+ *
+ * Everything here is Munin's and shared by every course: type, layout, the
+ * grade flags, the mastery bars. A course brings its accent pair (injected by
+ * munin.js over --accent / --accent-ink / --g4), its doodle set, and its own
+ * loading screen — and nothing else.
+ *
+ * Mono type on flat paper, everything outlined in 2px ink with a hard offset
+ * shadow, one accent, and hand-drawn doodles that mark progress.
+ * Colour still carries information rather than decoration: the four grade
+ * buttons keep the flag palette, and the mastery bars keep their three segments.
+ *
+ * Lowercase is applied to the app's own chrome only — never to card text or to
+ * section names, which come out of the deck and contain IRPCS, MHWS and Solent.
+ * A stylesheet that lowercases those is a stylesheet that lies about the syllabus.
+ *
+ * Dark is a derived inversion, not a second design: the ink and the paper swap,
+ * so the outlines and shadows that carry the whole look become off-white.
+ */
+
+@font-face {
+  font-family: "DM Mono";
+  src: url(fonts/dm-mono-400.woff2) format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "DM Mono";
+  src: url(fonts/dm-mono-500.woff2) format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+
+/* The one non-mono face in the app, and it earns its place: it letters the
+   figures. A drawing-office hand is what a technical drawing has always been
+   labelled in, and a mono label on a hand-drawn figure reads as a machine
+   annotating someone else's sketch. `block` rather than `swap` because the
+   labels sit inside a fixed viewBox — a late swap would reflow every one of
+   them across the drawing they are pointing at. */
+@font-face {
+  font-family: "Architects Daughter";
+  src: url(fonts/architects-daughter.woff2) format("woff2");
+  font-weight: 400; font-style: normal; font-display: block;
+}
+
+:root {
+  --bg: #f0eee7;
+  --surface: #fffdf7;
+  --surface-2: #e6e3da;
+  --line: #d5d1c6;
+  --line-strong: #121214;
+  --stroke: #121214;              /* every outline and every hard shadow */
+  --text: #121214;
+  --muted: #55555e;
+  /* Munin's own ink teal. The engine's default accent used to be one
+     course's indigo, so every OTHER course painted its loading screen in a
+     rival course's brand colour until course.json arrived — precisely the
+     window the screen exists to cover. munin.js overrides these four
+     variables per course; what is left here is Munin's own. */
+  --accent: #0e3f39;
+  --accent-ink: #fffdf7;
+  --flag: #ffd54a;                /* the one non-accent colour: chips and marks */
+  --g1: #b8371f;
+  --g2: #8f5a10;
+  --g3: #276e46;
+  --g4: #0e3f39;
+  --warn: #a4581a;
+  --r: 14px;
+  --r-sm: 10px;
+  --tap: 48px;
+  --bw: 2px;                      /* the outline weight the whole look rests on */
+  --sh: 4px 4px 0 var(--stroke);
+  --sh-sm: 3px 3px 0 var(--stroke);
+  --fig-blu: #1f5fa8;             /* water and wind, the one colour the app lacks */
+  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --hand: "Architects Daughter", "Bradley Hand", cursive;
+  color-scheme: light;
+}
+
+/* There is no prefers-color-scheme block, on purpose. Munin's default is LIGHT,
+ * not the device's setting (28 July 2026): the app is drawn — paper, ink and a
+ * bird — and paper is what it is drawn on. A media query here would also paint
+ * the first frame dark on a dark phone and then snap to light the moment
+ * munin.js sets data-theme, because the stylesheet is parsed before any script
+ * runs. Dark is a choice you make with the button, and it is remembered. */
+
+/* The in-app toggle. Both are declared, not just dark, because :root above is
+ * the light theme and these have to be able to say so louder than a course's
+ * injected accent. */
+:root[data-theme="light"] {
+  --bg: #f0eee7; --surface: #fffdf7; --surface-2: #e6e3da;
+  --line: #d5d1c6; --line-strong: #121214; --stroke: #121214;
+  --text: #121214; --muted: #55555e; --accent: #0e3f39; --accent-ink: #fffdf7;
+  --g1: #b8371f; --g2: #8f5a10; --g3: #276e46; --g4: #0e3f39; --warn: #a4581a;
+  --fig-blu: #1f5fa8;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #141519; --surface: #1c1e25; --surface-2: #272a33;
+  --line: #343742; --line-strong: #f1efe8; --stroke: #f1efe8;
+  --text: #f1efe8; --muted: #a6a7b2; --accent: #35917f; --accent-ink: #141519;
+  --g1: #ff8a75; --g2: #f0b64a; --g3: #5ed49a; --g4: #35917f; --warn: #f0b64a;
+  --fig-blu: #6fb2ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+/* Several components set their own `display`, which silently beats the browser's
+ * default [hidden] rule. Without this, hiding anything by attribute is a no-op. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 var(--mono);
+  font-feature-settings: "kern" 1;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr, .skip {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.skip:focus {
+  position: fixed; top: 8px; left: 8px; width: auto; height: auto; clip: auto;
+  z-index: 90; background: var(--accent); color: var(--accent-ink);
+  padding: 10px 14px; border-radius: var(--r-sm);
+}
+
+/* ── doodles ─────────────────────────────────────────────────────── */
+
+/* Every drawing in the app is one inline SVG stroked in currentColor, so it
+   inherits the theme and needs no second asset for dark mode. The wrapper is
+   what carries the size — a bare <svg> as a flex item ignores its own width. */
+.dood { display: inline-block; flex: none; line-height: 0; }
+/* One pen, and a fine one. The drawings are re-drawn by hand in the build, and
+   a hand-drawn line at 1.7 on a 22px doodle reads as a thick smudge; at 1.4 it
+   reads as a pen. The accent is the default ink for them — the places that
+   deliberately paint one grey, like a locked achievement, still win on
+   specificity. */
+.doodle { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor;
+  stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.dood { color: var(--accent); }
+
+.frieze {
+  position: relative;                       /* the rule is laid under the row */
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 4px; color: var(--accent);
+  padding: calc(10px + env(safe-area-inset-top)) 20px 0;
+  /* The height is held at what an unshrunk row costs, so that narrowing the
+     screen cannot pull the header up under the pill. */
+  min-height: calc(32px + env(safe-area-inset-top));
+}
+/* The line the drawings stand on, written by friezeRule(). Inset by the
+   frieze's own padding so it runs from the first drawing's foot to the last —
+   a line that stopped short of either would read as an underline under some of
+   them. Out of the flex flow: as a flex item it would have taken a share of
+   `space-between` and pushed the row about. Quieter than the drawings, because
+   it is the ground and they are the subject. */
+.frieze-rule {
+  position: absolute; left: 20px; right: 20px; bottom: 0;
+  height: 6px; line-height: 0; opacity: .5; pointer-events: none;
+}
+.frieze-rule svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.frieze-rule path {
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round;
+}
+/* Both end before the fixed `courses` pill, which is pinned to this same corner
+   and covered four of the ten drawings at 320 — a ten-slot progress row that
+   read as six. Only while the row reaches the right-hand edge of the screen:
+   past 900px the header is centred in 680 and the pill is well clear of it, and
+   insetting there would leave the frieze stopping short of the title. */
+@media (max-width: 900px) {
+  .frieze { padding-right: 120px; }
+  .frieze-rule { right: 120px; }
+}
+/* Ten drawings have to fit inside a 320px screen without a sideways scrollbar,
+   which is what sets this size rather than taste. */
+/* The drawing arrives with a hop and then settles into a breath: the entrance
+   plays once, the idle plays forever, and one element carries both. Two
+   animations on one element do not blend — the later one in the list simply
+   takes `transform` when its delay is up — which is exactly the hand-off
+   wanted here, because both meet at rest.
+
+   The stagger is a custom property rather than an inline `animation-delay`:
+   with two animations, one inline delay would set both of them and the idle
+   would start before the hop had finished. */
+.frieze .dood {
+  /* They shrink to fit whatever is left beside the pill rather than running
+     under it, and stay square as they do — a drawing whose feet leave the line
+     it is standing on is the one thing this row must not do. Flex-shrink, not
+     an arithmetic width, because how many drawings there are is the course's. */
+  flex: 0 1 22px; min-width: 0; width: 22px; height: auto; aspect-ratio: 1;
+  transform-origin: 50% 100%;              /* a creature with feet stays on them */
+  animation: hop-in .95s ease-out both,
+             breathe 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * .09s),
+                   calc(.95s + var(--i, 0) * .09s);
+}
+@media (min-width: 400px) { .frieze .dood { flex-basis: 26px; width: 26px; } }
+/* An empty berth: the drawings you have not earned yet are there in outline, so
+   the row reads as a progress bar you happen to like looking at. The class is
+   `unearned`, not `ghost` — `.ghost` is already the secondary-button style, and
+   a frieze of ten outlined buttons is what that collision looks like. */
+.frieze .unearned { opacity: .22; animation: none; }
+/* Home's header sits under the frieze rather than under the status bar, so it
+   keeps its own smaller inset — with the same 8px the pill costs everywhere. */
+#s-home .top { padding-top: 18px; }
+
+/* The entrance. This is a hop re-cut to be played once: the version that used
+   to loop spent most of its timeline standing still, because a hop every
+   second is a twitch. As an arrival the whole 0.95s is the hop, and it opens
+   with a short fade so the drawing arrives rather than turning out to have
+   been there. Squash before the leap, stretch in the air, squash on landing —
+   the drawing is elastic or it reads as a sticker being slid about. */
+@keyframes hop-in {
+  0%   { opacity: 0; transform: translateY(4px); }
+  14%  { opacity: 1; transform: translateY(2px) scale(1.12, .88); }
+  42%  { transform: translateY(-9px) scale(.88, 1.14); }
+  70%  { transform: translateY(0) scale(1.14, .88); }
+  86%  { transform: translateY(-2px) scale(.98, 1.03); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+/* The idle. Non-uniform scale about the feet, not a float: a drawing that
+   leaves the floor is a sticker, one that swells and settles is breathing. */
+@keyframes breathe {
+  0%, 100% { transform: scale(1, 1); }
+  45%      { transform: scale(.955, 1.05); }
+  72%      { transform: scale(1.025, .982); }
+}
+
+/* ── shell ───────────────────────────────────────────────────────── */
+
+#app { height: 100%; }
+
+.screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  padding-bottom: calc(58px + env(safe-area-inset-bottom));
+}
+.screen[hidden] { display: none; }
+
+.body {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 32px;
+}
+.body.centred { display: flex; }
+.body.centred > * { margin: auto; }
+
+.top {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px;
+  /* 28, not 20: the fixed `courses` pill is 48px tall and pinned to this
+     corner, and at 20 it clipped the top of the theme button beside it. */
+  padding: calc(28px + env(safe-area-inset-top)) 20px 16px;
+}
+.top h1 {
+  margin: 0; font-size: 1.5rem; font-weight: 500; letter-spacing: -.03em;
+  text-transform: lowercase;
+}
+.top h1.own { text-transform: none; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: .8rem; text-transform: lowercase; }
+
+.icon-btn {
+  min-width: var(--tap); min-height: var(--tap);
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: var(--r-sm);
+  color: var(--muted); font-size: 1.1rem; line-height: 1;
+}
+/* The theme toggle is a drawing now, not a character, so it needs a box —
+   font-size no longer sizes it. Three selectors' worth of weight on purpose:
+   the shelf's own CSS is injected at runtime, after this file, and its
+   `.shelf-mark .dood` would otherwise draw a 34px sun in the header. Colour is
+   taken from the button rather than from `.dood`'s accent, so the toggle stays
+   the quiet grey it has always been and still lights up on hover. */
+.icon-btn .dood.dood-glyph { width: 21px; height: 21px; color: inherit; }
+.icon-btn:disabled { opacity: .35; }
+.icon-btn:active:not(:disabled) { background: var(--surface-2); color: var(--text); }
+@media (hover: hover) { .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); } }
+
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--surface);
+  border-top: var(--bw) solid var(--stroke);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav button {
+  position: relative;
+  background: none; border: 0; padding: 0;
+  min-height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: .82rem; text-transform: lowercase;
+}
+.nav button span { display: none; }
+.nav button.on { color: var(--accent); font-weight: 500; }
+.nav button.on::before {
+  content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 28px; height: 3px; background: var(--accent);
+}
+.nav[hidden] { display: none; }
+
+/* ── home ────────────────────────────────────────────────────────── */
+
+.today { padding: 0; margin-bottom: 28px; }
+.today-counts { display: flex; gap: 22px; margin-bottom: 18px; flex-wrap: wrap; }
+.today-counts div { line-height: 1.2; }
+.today-counts b {
+  display: block; font-size: 2rem; font-weight: 500; color: var(--accent);
+  letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+}
+.today-counts span { font-size: .78rem; color: var(--muted); text-transform: lowercase; }
+.today-note { margin: 14px 0 0; font-size: .82rem; line-height: 1.6; color: var(--muted); }
+
+/* Buttons are the loudest object on any screen: 2px outline, hard shadow, and
+   they physically move into the shadow when pressed. */
+.primary {
+  width: 100%; min-height: var(--tap);
+  background: var(--accent); color: var(--accent-ink);
+  border: var(--bw) solid var(--stroke); border-radius: var(--r);
+  box-shadow: var(--sh);
+  font-size: 1rem; font-weight: 500; text-transform: lowercase;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.primary.big { min-height: 54px; }
+.primary:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--stroke); }
+.primary:disabled { background: var(--surface-2); color: var(--muted); box-shadow: none; transform: none; }
+
+.ghost {
+  min-height: var(--tap); padding: 0 16px;
+  background: var(--surface); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-radius: var(--r);
+  box-shadow: var(--sh-sm); text-transform: lowercase;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.ghost:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
+.ghost.wide { width: 100%; margin-top: 10px; }
+.ghost:disabled { opacity: .5; box-shadow: none; }
+.danger {
+  width: 100%; min-height: var(--tap); margin-top: 12px;
+  background: var(--surface); color: var(--g1);
+  border: var(--bw) solid var(--g1); border-radius: var(--r);
+  text-transform: lowercase;
+}
+.danger:active { transform: translate(2px, 2px); }
+
+.h-sect {
+  margin: 32px 0 12px; font-size: .78rem; font-weight: 500;
+  letter-spacing: .08em; text-transform: lowercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.h-sect::after { content: ""; flex: 1; height: 0; border-top: 2px dotted var(--line); }
+.h-sect:first-child { margin-top: 8px; }
+
+/* A theme, under a section heading. Sentence case and full weight, because it
+   is a name from the syllabus rather than a label on the app's own furniture —
+   and subordinate to .h-sect by being smaller and quieter, not by shouting
+   less. The same seven names head the Browse index. */
+.h-part {
+  margin: 22px 0 8px; font-size: .82rem; font-weight: 500;
+  display: flex; align-items: baseline; gap: 10px;
+  border-bottom: 2px dotted var(--line); padding-bottom: 7px;
+}
+.h-part > span:first-child { flex: 1; }
+.h-part-n {
+  flex: none; font-size: .72rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+#section-list > .h-part:first-child, #mastery > .h-part:first-child { margin-top: 4px; }
+/* The section rows already rule themselves off top and bottom. Under a heading
+   that carries its own dotted rule that is two lines of dots, three pixels
+   apart, which reads as a mistake. */
+.h-part + .sections { border-top: 0; }
+#mastery .mastery { margin-bottom: 4px; }
+
+/* Section rows are separated by a dotted rule, not stacked as individual boxes —
+   twenty-four outlined cards in a column is a lot of furniture for a list. */
+.sections { list-style: none; margin: 0; padding: 0; border-top: 2px dotted var(--line); }
+.sections li { border-bottom: 2px dotted var(--line); }
+/* Drawing, then name and meta, then the badge — the drawing spans both text
+   rows so a two-line section name does not push it off centre. */
+.sections button {
+  width: 100%; text-align: left;
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 2px 12px;
+  background: none; border: 0; padding: 13px 2px; min-height: var(--tap);
+}
+.sections button:active { background: var(--surface-2); }
+.sect-name { grid-column: 2; font-weight: 500; font-size: .92rem; }
+.sect-meta { grid-column: 2; color: var(--muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.sect-badge {
+  grid-column: 3; grid-row: 1 / span 2; align-self: center; justify-self: end;
+  min-width: 30px; height: 26px; padding: 0 8px;
+  display: grid; place-items: center;
+  border: var(--bw) solid var(--stroke); border-radius: 13px;
+  font-size: .76rem; font-variant-numeric: tabular-nums;
+  background: var(--flag); color: #121214;
+}
+.sect-art { grid-column: 1; grid-row: 1 / span 2; align-self: center;
+  width: 26px; height: 26px; color: var(--accent); }
+.sections button:active .sect-art { transform: translateY(1px); }
+.sect-meter {
+  grid-column: 1 / -1; height: 8px; border-radius: 4px;
+  border: var(--bw) solid var(--stroke); background: var(--surface);
+  overflow: hidden; margin-top: 9px;
+}
+.sect-meter i { display: block; height: 100%; background: var(--accent); transition: width .5s ease; }
+
+.fineprint { color: var(--muted); font-size: .78rem; line-height: 1.65; margin: 28px 0 0; }
+
+.ask-exam {
+  border: var(--bw) solid var(--stroke); border-radius: var(--r);
+  background: var(--surface); box-shadow: var(--sh);
+  padding: 18px; margin-bottom: 24px;
+}
+.ask-exam h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 500; letter-spacing: -.02em; text-transform: lowercase; }
+.ask-exam p { margin: 0 0 16px; font-size: .84rem; line-height: 1.6; color: var(--muted); }
+.ask-exam input[type=date] {
+  width: 100%; min-height: var(--tap); padding: 0 12px;
+  background: var(--bg); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); font-size: 1rem;
+}
+.ask-parsed { margin: 10px 0 0 !important; font-weight: 500; color: var(--text) !important; }
+.ask-exam .link-btn { padding-left: 0; }
+
+.how { margin-top: 24px; border-top: 2px dotted var(--line); }
+.how summary {
+  padding: 14px 2px; min-height: var(--tap);
+  display: flex; align-items: center; cursor: pointer;
+  font-weight: 500; font-size: .9rem; list-style: none; text-transform: lowercase;
+}
+.how summary::-webkit-details-marker { display: none; }
+.how summary::after { content: "+"; margin-left: auto; color: var(--accent); font-size: 1.1rem; }
+.how[open] summary::after { content: "\2212"; }
+.how p { margin: 0 0 14px; font-size: .84rem; line-height: 1.7; color: var(--muted); }
+.how p b { color: var(--text); font-weight: 500; }
+
+.key { display: flex; gap: 16px; flex-wrap: wrap; margin: -4px 0 14px; font-size: .74rem; color: var(--muted); }
+.key span { display: flex; align-items: center; gap: 6px; }
+.key i { width: 12px; height: 8px; border: 1px solid var(--stroke); display: block; }
+
+.grade-ask {
+  /* The gap under it is padding, not margin: with the grade row out of the flow
+     a margin here collapses with the dock foot's, and the dock is 8px shorter
+     while the question is up than it is once the answer needs the room. */
+  max-width: 62ch; margin: 0 auto; padding-bottom: 10px; text-align: center;
+  font-size: .76rem; color: var(--muted); text-transform: lowercase;
+}
+/* Held empty rather than added on reveal, which is why it hides with a class
+   and not with `hidden`: this line arrives at the exact moment the answer needs
+   the room, and a dock that grows by its height takes that room from the card —
+   138px to 170px, which is 44% of a phone held sideways. */
+.grade-ask.away { visibility: hidden; }
+/* Except where there is nothing to hold it in. On a short screen the band is a
+   twelfth of the window, and four labelled buttons ask the question themselves. */
+@media (max-height: 620px) {
+  .grade-ask { display: none; }
+}
+
+.banner {
+  margin: 0 0 20px; padding: 10px 12px;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: .84rem; line-height: 1.6; color: var(--muted);
+}
+.banner b { color: var(--text); font-weight: 500; }
+.banner.tight { border-color: var(--warn); }
+.banner.tight b { color: var(--warn); }
+
+.trouble {
+  width: 100%; text-align: left; margin-top: 20px;
+  display: grid; gap: 3px; min-height: var(--tap);
+  background: var(--surface); border: var(--bw) solid var(--warn);
+  border-radius: var(--r); padding: 12px 14px;
+}
+.trouble span { font-weight: 500; font-size: .9rem; color: var(--warn); }
+.trouble small { color: var(--muted); font-size: .76rem; }
+
+/* Installing, in the run of settings on the Progress screen. No box and no
+   accent: it is one of Offline, Sync and Backup, and it reads as one of them —
+   a heading, a line of explanation, a button. The wrapper is a plain block so
+   that app.js can hide the heading along with the button when there is nothing
+   to offer; it carries no spacing of its own, and the margins of the heading
+   and the button collapse through it, so the run keeps its rhythm.
+   Not `display: contents`, which would beat the `hidden` attribute's own
+   `display: none` and leave the section showing on a browser that cannot
+   install anything. */
+.install-sect { margin: 0; }
+.install-sect[hidden] { display: none; }
+
+/* No .browse-list .empty rule: when nothing matches, the count line above the
+   list says so and the recovery buttons sit beside it, rather than a sentence
+   inside a list of no things. */
+
+
+/* ── labelled doodles ────────────────────────────────────────────── */
+
+/* A figure is not a diagram. The diagrams in img/ are reference pages you
+   pinch-zoom; a figure is a small drawing that belongs to one card, drawn in
+   the same ink as the chrome doodles. No white plate under it: it is stroked
+   in currentColor on the card's own paper, so dark mode costs nothing and it
+   can use the theme's accent. Authored in src/figures.py. */
+.fig-doodle .plate {
+  display: block; width: 100%; padding: 12px 8px 8px;
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); box-shadow: var(--sh-sm);
+  text-align: left;
+}
+button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
+
+/* In browse the drawing sits under the answer, same as a diagram does — and is
+   a real button, as it is on the study screen. As a <span> with a click handler
+   the lightbox was unreachable without a pointer, under a line of text telling
+   you to tap it. */
+.b-fig {
+  display: block; width: 100%; margin: 12px 0 0; padding: 10px 6px 6px;
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); cursor: zoom-in; text-align: left;
+}
+/* The diagram's own border is the frame; the button is only the hit area. */
+.b-plate {
+  display: block; width: 100%; padding: 0;
+  background: none; border: 0; cursor: zoom-in;
+}
+
+/* Enlarged, a figure is still vector: it is the card's own markup scaled by
+   the same transform the diagrams use, so it stays sharp at any zoom. */
+.lb-fig {
+  color: var(--text); width: min(96%, 900px); transform-origin: 0 0; will-change: transform;
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); padding: 12px 10px 10px;
+}
+.lb-fig .figure { width: 100%; height: auto; }
+/* The drawing is indigo at one weight; the labels are ink. That split is the
+   whole idea: the figure is a drawing, the labels are writing on top of it.
+   The nine-step weight hierarchy this used to have is what made these read as
+   plotted however much the line wobbles, so it is gone — with two exceptions
+   below that carry meaning rather than emphasis. */
+.figure {
+  display: block; width: 100%; height: auto;
+  fill: none; stroke: currentColor; stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round;
+  color: var(--accent);
+  /* The default size for a label, set here on the drawing rather than on the
+     text, so that a `font-size` attribute on a single label can still win.
+     Set on `.figure text` it could not: author CSS beats a presentation
+     attribute, which is why every `size=` in figures.py rendered at 15 for
+     as long as this file has existed. */
+  font-size: 15px;
+}
+/* Labels sit on top of the drawing, so they are knocked out of it: the paper
+   colour is painted as a fat stroke *under* the glyphs. Without this every
+   label that crosses a rigging wire reads as struck through. */
+.figure text {
+  fill: var(--text); font-family: var(--hand); font-weight: 400;
+  letter-spacing: .01em;
+  paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+/* Labels the card is not asking about stay on the drawing but step back, so
+   one figure can serve several cards without answering their questions. The
+   dimming is opacity rather than a colour swap: it keeps port red and
+   starboard green recognisable while they are only context. */
+.figure [data-l] { opacity: .3; transition: opacity .18s ease; }
+/* A dimmed *label* needs more opacity than a dimmed line. The labels are set in
+   a handwriting face at 400 where they used to be mono at 500 — a much lighter
+   colour on the page — and 0.3 of it is a smudge rather than context. The
+   drawing dims to 0.3; the writing on it dims to 0.45. Coloured labels sit a
+   step below that: saturated colour survives dimming better than grey, so a
+   dimmed red label still pulls the eye first. */
+.figure text[data-l]:not(.on) { opacity: .45; }
+.figure text.c-red:not(.on), .figure text.c-grn:not(.on),
+.figure text.c-acc:not(.on), .figure text.c-blu:not(.on),
+.figure text.c-amb:not(.on) { opacity: .34; }
+.figure [data-l].on { opacity: 1; }
+/* The small print under a label is only ever about the label. Dimmed, it is
+   unreadable texture that makes the drawing look smudged — so it goes.
+
+   It also carries the hand at its thinnest. Architects Daughter ships one
+   weight, so the browser is asked to synthesise a heavier one here: the
+   flares card has four lines of small print under each flare, and at 400 it
+   measured a fifth less ink on the page than the mono it replaced. Nothing
+   larger — the note sizes in figures.py have never reached the page, because
+   `.figure text` sets font-size in CSS and author CSS beats a presentation
+   attribute. That is worth fixing one day; it is not this change. */
+.figure text.f-note { stroke-width: 3px; font-weight: 600; }
+/* Only small print that belongs to a label disappears with it. Small print
+   with no label — a chart's scale numbers — is part of the drawing and stays,
+   or the one card that needs to read a position off the grid loses the grid. */
+.figure text.f-note[data-l]:not(.on) { opacity: 0; }
+
+/* What follows is the figure LANGUAGE, and it is Munin's: what a dash means,
+   what a leader line is, what a swept arc is. It is true of any subject drawn
+   this way. A course's own nouns — its rigging, its fenders, its pontoons —
+   live in courses/<id>/figures.css, because they are that course's drawings
+   and not the app's. Fifty of them used to be in this file, applied over every
+   deck anybody imported. */
+.figure .f-thin { stroke: var(--muted); stroke-width: 1.4; }
+/* Exception 1 of 2: a dash still means "construction line", "section cut" or
+   "not really there" — a waterline is dashed because it is a level, not a part
+   of the thing. Figures across both courses would lose that if dashes went
+   solid. */
+.figure .f-dash { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 6 6; }
+.figure .f-dash-acc { stroke-dasharray: 5 5; stroke-width: 1.4; }
+.figure .f-lead { stroke-width: 1.4; }
+.figure .f-meas { stroke: var(--muted); stroke-width: 1.4; }
+.figure .f-cut { stroke-width: 1.4; stroke-dasharray: 7 5; }
+/* Exception 2 of 2: the two arcs are a swept area rather than a line, and a
+   swept area at hairline is a scratch. They keep a weight, at low opacity. */
+.figure .f-arc { stroke-width: 4; opacity: .35; }
+.figure .f-arc-on { stroke-width: 5; opacity: .6; }
+.figure .f-dash-red { stroke-dasharray: 6 5; stroke-width: 1.4; }
+.figure .fill-amb { fill: var(--g2); stroke: var(--stroke); }
+/* The accent used to mean "this is the bit the card is asking about". The
+   drawing is now that same indigo, so the highlight role moves to ink. */
+.figure .meas-on { stroke: var(--text); stroke-width: 1.8; }
+
+/* Colour is only ever meaning here: the sides carry their light colours, the
+   flares carry theirs. Every one of these is a token the theme already tests
+   for contrast on both --surface and --bg. */
+/* The colour classes set a *stroke*, which on a <text> would repaint the paper
+   knockout in the label's own colour and fill in every counter. Text takes the
+   colour as fill and keeps the paper halo. */
+.figure .c-red { stroke: var(--g1); } .figure text.c-red { fill: var(--g1); stroke: var(--surface); }
+.figure .c-grn { stroke: var(--g3); } .figure text.c-grn { fill: var(--g3); stroke: var(--surface); }
+/* `c-acc` marked "this is the thing the card is asking about". The body of the
+   drawing is now that same indigo, so the highlight has to be the other ink or
+   it stops highlighting anything. */
+.figure .c-acc { stroke: var(--text); } .figure text.c-acc { fill: var(--text); stroke: var(--surface); }
+.figure .c-amb { stroke: var(--g2); } .figure text.c-amb { fill: var(--g2); stroke: var(--surface); }
+.figure .c-blu { stroke: var(--fig-blu); } .figure text.c-blu { fill: var(--fig-blu); stroke: var(--surface); }
+.figure .c-mut { stroke: var(--muted); } .figure text.c-mut { fill: var(--muted); stroke: var(--surface); }
+.figure .fill-red { fill: var(--g1); stroke: var(--stroke); }
+.figure .fill-grn { fill: var(--g3); stroke: var(--stroke); }
+.figure .fill-yel { fill: var(--flag); stroke: var(--stroke); }
+.figure .fill-blu { fill: var(--fig-blu); stroke: var(--stroke); }
+.figure .fill-ink { fill: var(--stroke); stroke: var(--stroke); }
+.figure .fill-pap { fill: var(--surface); stroke: var(--stroke); }
+
+/* ── the figure draws itself ─────────────────────────────────────── */
+
+/* A figure arrives being drawn, the same way the boot raven does, and for the
+   same reason: these are drawings, and a drawing that fades up was never
+   drawn by anybody.
+ *
+ * A pen is stroke-dasharray, so only some of a figure can take one. A dash
+ * already means "construction line" or "section cut"; an arc is a swept area,
+ * not a line; a flare is a filled shape, where a dash animation hides the
+ * outline and leaves the fill sitting there; and a label is glyphs, with no
+ * line to travel along. Those all fade instead, and the split is decided in
+ * drawFigureOn() — see the note there for why it is not decided in the build.
+ *
+ * Everything happens over about nine-tenths of a second. Longer was measured
+ * and rejected: a figure is under a card you are trying to read, and a drawing
+ * that is still arriving when you have finished reading the question is a
+ * drawing in the way.
+ *
+ * The classes are only ever added by drawFigureOn(), so a figure rendered by
+ * anything else — the lightbox — is simply already finished. */
+.fig-draw .pen { stroke-dasharray: 1 1; animation: fig-pen .75s ease-out both; }
+.fig-draw .soft { animation: fig-fade .28s ease-out both; animation-delay: .42s; }
+.fig-draw .lab { animation: fig-lab .3s ease-out both; animation-delay: .62s; }
+.figure text { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* pathLength="1" renormalises every path to a length of 1, so one rule draws
+   any of them — the same trick the boot raven uses. A dash of `1 1` is then
+   the whole path followed by an equal gap, which at offset 0 is a finished
+   drawing: if the animation never runs, nothing is left half-drawn. */
+@keyframes fig-pen { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* Both fades end on --tgt, the element's own resting opacity, measured off the
+   cascade before the animation is attached. Ending them on 1 instead would
+   un-dim every label the card is not asking about, and the dimming is what
+   lets one drawing serve six cards. */
+@keyframes fig-fade { from { opacity: 0; } to { opacity: var(--tgt, 1); } }
+@keyframes fig-lab {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: var(--tgt, 1); transform: none; }
+}
+
+/* ── study ───────────────────────────────────────────────────────── */
+
+#s-study { padding-bottom: 0; }
+
+.study-top { align-items: center; gap: 12px; padding-bottom: 12px; }
+.study-meta { flex: 1; min-width: 0; }
+.study-sub { margin: 8px 0 0; font-size: .74rem; color: var(--muted); display: flex; gap: 6px; }
+.study-sect { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-left { flex: none; font-variant-numeric: tabular-nums; }
+/* `\20`, not a literal space: a space is what *ends* a CSS hex escape, so the
+   one that used to be here was eaten and the header read "terms ·0 done". */
+.study-left::before { content: "\00b7\20"; }
+.progress {
+  height: 10px; border-radius: 5px; overflow: hidden;
+  border: var(--bw) solid var(--stroke); background: var(--surface);
+}
+.progress-fill { height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
+
+/* The card is the only object on the screen: no box around it, centred, and
+   sized to be read at arm's length on a bouncing boat. */
+.card-body { padding-bottom: 8px; display: flex; flex-direction: column; cursor: pointer; }
+.card-body.shown { cursor: default; }
+.qa { max-width: 60ch; width: 100%; margin: auto; padding: 4px 0 8px; }
+.qa.in { animation: cardIn .26s ease-out both; }
+
+@keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes revealIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.chip {
+  display: inline-block; padding: 3px 10px;
+  border: var(--bw) solid var(--stroke); border-radius: 9px;
+  background: var(--flag); color: #121214;
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+}
+.chip.warn { background: var(--surface); color: var(--warn); border-color: var(--warn); }
+
+.question {
+  font-size: 1.45rem; font-weight: 500; line-height: 1.3; letter-spacing: -.03em;
+}
+.rule { border: 0; border-top: 2px dotted var(--line); margin: 22px 0 18px; }
+#answer-wrap { animation: revealIn .22s ease-out both; }
+.answer { font-size: 1.02rem; line-height: 1.65; color: var(--muted); }
+.answer b { font-weight: 500; color: var(--accent); }
+
+.fig { margin: 22px 0 0; }
+.fig-btn {
+  display: block; width: 100%; padding: 6px;
+  background: #fff; border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
+}
+.fig-btn:active { transform: translate(3px, 3px); box-shadow: none; }
+.fig-btn img { display: block; width: 100%; height: auto; }
+.fig figcaption { margin-top: 8px; font-family: var(--hand); font-size: .82rem;
+  color: var(--muted); text-align: center; }
+.fig-missing {
+  margin: 18px 0 0; padding: 12px 14px; font-size: .82rem; line-height: 1.55;
+  border-radius: var(--r-sm); color: var(--muted);
+  background: var(--surface); border: 2px dashed var(--line-strong);
+}
+
+.dock {
+  flex: 0 0 auto;
+  padding: 14px 20px calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: var(--bw) solid var(--stroke);
+}
+.dock > .primary, .grades { max-width: 60ch; margin: 0 auto; }
+/* The same height as the grade row that replaces it, so the dock does not
+   change size under the thumb at the moment the card needs more room. */
+#reveal-btn { min-height: 58px; }
+/* The control that arrives in that rectangle is deaf for a beat — see
+   settleDock() in app.js. Without it the second tap of a double-tap graded a
+   card whose answer had never been painted, or opened the next card's answer
+   before its question had been read. */
+.dock.settling > .primary, .dock.settling .grades { pointer-events: none; }
+
+.grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.grade {
+  min-height: 58px; padding: 6px 2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border-radius: var(--r-sm); border: var(--bw) solid var(--stroke);
+  background: var(--surface); box-shadow: var(--sh-sm);
+  transition: transform .07s ease, box-shadow .07s ease;
+}
+.grade b { font-size: .86rem; font-weight: 500; text-transform: lowercase; }
+.grade small {
+  /* No opacity: it dropped the interval labels below the AA floor for this size. */
+  font-size: .66rem; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.grade:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
+/* The flag palette: four colours on the one control where the choice between
+   four options has to be read at a glance. */
+.g1 { color: var(--g1); } .g2 { color: var(--g2); }
+.g3 { color: var(--g3); } .g4 { color: var(--g4); }
+
+.dock-foot { display: flex; justify-content: space-between; gap: 12px; max-width: 60ch; margin: 8px auto 0; }
+.link-btn {
+  background: none; border: 0; padding: 10px 2px;
+  min-height: var(--tap); color: var(--muted);
+  font-size: .78rem; text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-style: dotted; text-transform: lowercase;
+}
+.link-btn:disabled { opacity: .4; text-decoration: none; }
+
+.keyhint { display: none; margin: 12px 0 0; text-align: center; font-size: .72rem; color: var(--muted); text-transform: lowercase; }
+@media (hover: hover) and (pointer: fine) { .keyhint { display: block; } }
+
+/* ── video ───────────────────────────────────────────────────────── */
+
+.vids { margin: 20px 0 0; }
+.vhead { margin: 0 0 8px; font-size: .74rem; letter-spacing: .08em;
+  text-transform: lowercase; color: var(--muted); }
+.vrow { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* The poster is the clip's own first second, not a 54th image asset —
+   preload="metadata" costs tens of KB, not the whole video. */
+.vthumb {
+  position: relative; flex: 0 0 auto; width: 108px; padding: 0;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  background: #000; overflow: hidden; box-shadow: var(--sh-sm);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.vthumb:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
+.vthumb video { display: block; width: 100%; height: 150px; object-fit: cover; pointer-events: none; }
+.vthumb .vplay {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: #fff; font-size: 1.5rem; text-shadow: 0 1px 6px rgba(0, 0, 0, .7);
+}
+.vthumb .vlen {
+  position: absolute; left: 5px; bottom: 5px;
+  background: var(--flag); color: #121214;
+  border: 1.5px solid #121214; border-radius: 5px;
+  font-size: .6rem; padding: 0 5px; font-variant-numeric: tabular-nums;
+}
+
+/* Width follows the video rather than the column: these are 9:16 clips, and a
+   full-width box around one is mostly black bars. */
+.vplayer {
+  display: inline-block; max-width: 100%;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  overflow: hidden; background: #000; box-shadow: var(--sh-sm);
+}
+/* Capped so the grade buttons never get pushed off a small screen — the whole
+   point of playing in the card flow is that you can still answer. */
+/* Height leads, width follows the aspect: an intrinsically 432px-wide file in a
+   max-content box still leaves a black strip beside a portrait clip. */
+.vplayer video { display: block; height: 46vh; width: auto; max-width: 100%; background: #000; }
+.vbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 4px 2px 0; font-size: .7rem; color: var(--muted);
+}
+.vbar a { color: var(--accent); text-underline-offset: 3px; }
+.vbar .link-btn { padding: 6px 0; min-height: 32px; font-size: .7rem; }
+.vcap { margin: 8px 0 0; font-size: .74rem; line-height: 1.5; color: var(--muted); }
+
+.reel { margin: -8px 0 22px; }
+.reel-h { margin: 0 0 8px; font-size: .76rem; color: var(--muted); text-align: left; }
+.reel-strip { overflow-x: auto; padding-bottom: 4px; }
+.reel .vrow { flex-wrap: nowrap; }
+.reel .vplayer { min-width: min(100%, 240px); }
+
+/* ── done ────────────────────────────────────────────────────────── */
+
+.done-card { padding: 8px 0; text-align: center; max-width: 340px; width: 100%; }
+.done-tick {
+  margin: 0 auto 16px; width: 74px; height: 74px;
+  display: grid; place-items: center;
+  border: var(--bw) solid var(--stroke); border-radius: 50%;
+  background: var(--surface); box-shadow: var(--sh);
+  color: var(--accent); position: relative;
+}
+.done-tick .dood { width: 44px; height: 44px; animation: sway 2.6s ease-in-out infinite; }
+/* Four pen-strokes that fly off the badge when a session lands. */
+.done-tick .spark {
+  position: absolute; width: 12px; height: 2px; background: var(--accent);
+  border-radius: 2px; animation: spark .9s ease-out both;
+}
+/* Engine motion, named for what it does. It used to be called `sail`, which
+ * is one course's word sitting in the shared stylesheet. */
+@keyframes sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes hop { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-3px) rotate(-3deg); } 60% { transform: translateY(0) rotate(2deg); } }
+@keyframes spark { from { opacity: 1; transform: translate(0, 0) scale(.5); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); } }
+
+.done-card h2 { margin: 0 0 8px; font-size: 1.15rem; font-weight: 500; letter-spacing: -.02em; }
+.done-line { margin: 0 0 24px; color: var(--muted); font-size: .86rem; line-height: 1.6; }
+.done-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  margin-bottom: 24px; text-align: center;
+}
+.done-stats div b {
+  display: block; font-size: 1.3rem; font-weight: 500; color: var(--accent);
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+}
+.done-stats div span { font-size: .68rem; color: var(--muted); text-transform: lowercase; }
+.done-card .ghost { width: 100%; margin-top: 10px; }
+
+/* ── browse ──────────────────────────────────────────────────────── */
+
+/* The count and the clear/open controls live up here with the field rather than
+   in the scrolling list: they are feedback on what you just typed, and from
+   1,200px down the list they were a thousand pixels off screen. */
+.searchbar { display: grid; gap: 8px; padding: 0 20px 12px; }
+#search, #sect-filter {
+  width: 100%; min-height: var(--tap); padding: 0 12px;
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); font-size: 1rem;
+}
+#sect-filter { appearance: none; padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%),
+                    linear-gradient(135deg, var(--text) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 21px, calc(100% - 13px) 21px;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+/* The native ✕ in a type=search field is a four-pixel-wide target that clears
+   the text and leaves the section filter set, next to a labelled button that
+   says what it will undo. One of them had to go. */
+#search::-webkit-search-cancel-button { display: none; }
+
+.result-count { margin: 2px 0 0; font-size: .78rem; color: var(--muted); }
+.result-count.nothing { color: var(--text); font-size: .86rem; margin-top: 4px; }
+.browse-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+.browse-acts .link-btn { padding-left: 0; padding-right: 0; }
+
+/* ── the browse index ──
+   Twenty-four sections in seven themes, each marked with the drawing it already
+   owns on the home screen. This is the screen you land on with no query: a wall
+   of 537 questions is a search result nobody asked for, and the dropdown that
+   used to be the only way out of it wanted you to know the answer first.
+
+   Tiles rather than rows because the drawing is the point — at two columns a
+   drawing can be 30px and still lead, where a row makes it a bullet. */
+.browse-index { padding-bottom: 8px; }
+.bgroup + .bgroup { margin-top: 26px; }
+
+.bgroup-h {
+  display: flex; align-items: center; gap: 9px;
+  margin: 0 0 10px; font-size: .82rem; font-weight: 500;
+  letter-spacing: .01em;
+  border-bottom: 2px dotted var(--line); padding-bottom: 8px;
+}
+.bgroup-t { flex: 1; }
+.bgroup-art { width: 22px; height: 22px; flex: none; color: var(--accent); }
+/* The count is the way in, not a statistic: pressing it reads the whole theme.
+   Right-aligned and arrowed so it does not read as part of the heading. */
+.bgroup-all {
+  flex: none; background: none; border: 0; padding: 6px 2px;
+  /* It is a way into the theme, so it is a target: 29px tall was under the 44
+     the thumb needs, at every width. */
+  min-height: 44px;
+  color: var(--accent); font: inherit; font-size: .74rem;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.bgroup-all:active { opacity: .6; }
+
+.btiles {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+}
+.btile {
+  width: 100%; height: 100%; text-align: left;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr auto;
+  gap: 2px 10px;
+  padding: 12px 12px 11px; min-height: 92px;
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm); box-shadow: var(--sh-sm);
+  font: inherit; color: var(--text);
+}
+.btile:active { transform: translate(2px, 2px); box-shadow: none; }
+.btile-art { grid-column: 1; grid-row: 1; width: 30px; height: 30px; color: var(--accent); }
+/* The section number, which the deck writes into the title. On a tile it is a
+   tag rather than the first two characters of a sentence. */
+.btile-no {
+  grid-column: 2; grid-row: 1; align-self: center; justify-self: start;
+  font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums;
+  border: var(--bw) solid var(--line); border-radius: 4px; padding: 0 5px;
+}
+.btile-name {
+  grid-column: 1 / -1; grid-row: 2;
+  margin-top: 7px; font-size: .82rem; font-weight: 500; line-height: 1.35;
+  /* Section names come out of the deck and say IRPCS and IALA. Never lowercased. */
+}
+.btile-n {
+  grid-column: 1 / -1; grid-row: 3;
+  margin-top: 3px; font-size: .7rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.browse-list { list-style: none; margin: 0; padding: 0; border-top: 2px dotted var(--line); }
+/* No rule ruling off an empty screen. */
+.browse-list:empty { border-top: 0; }
+.browse-list li { border-bottom: 2px dotted var(--line); background: none; }
+.browse-list summary {
+  padding: 14px 2px; min-height: var(--tap);
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer; list-style: none; font-weight: 500; font-size: .92rem;
+}
+.b-head { flex: 1; min-width: 0; }
+/* Why this card is in the list, when the word you searched for is in the answer
+   and the row shows only the question. */
+.b-why {
+  display: block; margin-top: 5px;
+  font-weight: 400; font-size: .74rem; line-height: 1.55; color: var(--muted);
+}
+/* Once the card is open the whole answer is right there, and the extract of it
+   sat four lines above saying the same words in a worse shape. */
+.browse-list details[open] .b-why { display: none; }
+/* Which section the run of rows below belongs to. */
+.b-where {
+  display: block; margin-bottom: 4px;
+  font-weight: 400; font-size: .7rem; color: var(--muted);
+}
+/* The flag colour, not the accent: the card text already uses the accent for
+   its own emphasis, so an accent-coloured match was indistinguishable from a
+   bold phrase that happened to be nearby. This is the same chip yellow the
+   leech and streak markers use, on the same near-black ink. */
+mark {
+  background: var(--flag); color: #121214;
+  padding: 0 2px; border-radius: 2px;
+}
+.browse-list summary::-webkit-details-marker { display: none; }
+/* A chevron, not a plus: in a flashcard app "+" reads as add-this-to-my-deck at
+   least as readily as expand. */
+.browse-list summary::after {
+  content: "\25be"; margin-left: auto; color: var(--accent); font-size: .9rem; flex: none;
+}
+.browse-list details[open] summary::after { content: "\25b4"; }
+/* The answer is what you opened the card for: it is not secondary text. */
+.browse-ans { padding: 0 0 18px; font-size: .92rem; line-height: 1.7; color: var(--text); }
+.browse-ans b { color: var(--accent); font-weight: 500; }
+.browse-ans .b-sect { display: block; margin-top: 12px; font-size: .72rem; }
+.browse-ans img {
+  width: 100%; height: auto; margin-top: 14px; cursor: zoom-in;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm); background: #fff;
+}
+.browse-ans .b-zoom { display: block; margin-top: 6px; font-size: .72rem; }
+
+/* ── stats ───────────────────────────────────────────────────────── */
+
+.tiles {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.tile {
+  background: var(--surface); padding: 14px 16px;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r);
+  box-shadow: var(--sh-sm);
+}
+.tile b {
+  display: block; font-size: 1.5rem; font-weight: 500; color: var(--accent);
+  letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+}
+.tile span { font-size: .74rem; line-height: 1.5; color: var(--muted); display: block; margin-top: 2px; }
+
+.forecast {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+  align-items: end; height: 108px;
+  border-bottom: 2px dotted var(--line); padding: 4px 0 8px;
+}
+.fc-col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 5px; }
+.fc-n { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fc-bar {
+  width: 100%; min-height: 3px; background: var(--accent);
+  border: var(--bw) solid var(--stroke); border-radius: 4px 4px 0 0;
+}
+.fc-bar.empty { background: var(--surface-2); }
+.fc-d { font-size: .66rem; color: var(--muted); }
+
+.mastery { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.mastery li { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; font-size: .86rem; }
+/* "0 solid · 0 seen · 24 total" is 189px of max-content at every width, and
+   `auto` hands it that before the name gets anything: at 320 a section name was
+   seven lines in a 79px column beside a half-empty count. Below the width where
+   both fit on one line, the count goes under the name instead of beside it. */
+@media (max-width: 430px) {
+  .mastery li { grid-template-columns: minmax(0, 1fr); }
+}
+.mastery .m-n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .76rem; }
+.m-bar {
+  grid-column: 1 / -1; height: 10px; border-radius: 5px;
+  border: var(--bw) solid var(--stroke); background: var(--surface);
+  display: flex; overflow: hidden;
+}
+.m-bar i { display: block; height: 100%; transition: width .5s ease; }
+.m-mature { background: var(--g3); }
+.m-young { background: color-mix(in srgb, var(--g3) 40%, var(--surface)); }
+.m-learn { background: var(--g2); }
+
+/* ── ship's log (achievements) ───────────────────────────────────── */
+
+.ach { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.ach li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--r);
+  border: var(--bw) solid var(--stroke); background: var(--surface);
+  box-shadow: var(--sh-sm);
+}
+/* Locked ones stay drawn rather than blanked out — a row of question marks
+   tells you nothing about what is worth doing next. */
+.ach li.locked { box-shadow: none; border-style: dashed; opacity: .55; background: none; }
+.ach .dood { width: 30px; height: 30px; color: var(--accent); }
+.ach li.locked .dood { color: var(--muted); }
+.ach .a-txt { min-width: 0; }
+.ach b { display: block; font-size: .8rem; font-weight: 500; text-transform: lowercase; }
+.ach small { display: block; font-size: .68rem; color: var(--muted); line-height: 1.4; }
+.ach-count { margin: -4px 0 14px; font-size: .76rem; color: var(--muted); }
+
+/* The unlock card: lands over the bottom of the screen, wiggles once, leaves. */
+/* Top of the screen, not the bottom: an unlock fires mid-session, and at the
+   bottom it sat directly over Show answer and the four grade buttons. */
+.unlock {
+  position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top));
+  /* Above the `courses` pill at 80, which shares this top inset and was drawn
+     inside the card — cutting its border, its corner and its shadow. Still
+     under the loading screen at 95. */
+  z-index: 85; width: min(340px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--r);
+  border: var(--bw) solid var(--stroke); background: var(--flag); color: #121214;
+  box-shadow: var(--sh);
+  animation: unlockIn .42s cubic-bezier(.2, 1.3, .5, 1) both;
+}
+.unlock .dood { width: 34px; height: 34px; }
+.unlock .u-txt { min-width: 0; }
+.unlock .u-k { display: block; font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; }
+.unlock b { display: block; font-size: .92rem; font-weight: 500; text-transform: lowercase; }
+.unlock small { display: block; font-size: .7rem; line-height: 1.4; }
+/* Never `hidden` or `visibility`, same as the toast below: this is a live
+   region, and one that is out of the tree at the moment its text changes is
+   announced unreliably. It is emptied on its way out instead (stowUnlock() in
+   app.js) — the word "unlocked" used to be markup, so the first-run picker was
+   read out as "skip to content, unlocked, munin". */
+.unlock.away { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(-10px); animation: none; }
+@keyframes unlockIn {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-26px) scale(.9) rotate(-3deg); }
+  70% { transform: translateX(-50%) translateY(0) scale(1.03) rotate(1.5deg); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1) rotate(0); }
+}
+
+.settings { display: grid; gap: 0; border-top: 2px dotted var(--line); }
+.setting {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: none; border: 0; border-bottom: 2px dotted var(--line);
+  padding: 12px 2px; min-height: var(--tap);
+  font-size: .88rem;
+}
+.setting input[type=number], .setting input[type=date] {
+  /* 44, not 42: two pixels under the thumb's floor is still under it. */
+  min-height: 44px; text-align: center; flex: none;
+  background: var(--surface); border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+}
+.setting input[type=number] { width: 80px; }
+.setting input[type=date] { padding: 0 10px; }
+.setting.row { justify-content: flex-start; gap: 12px; }
+.setting.row input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.setting small { display: block; color: var(--muted); font-size: .74rem; margin-top: 3px; line-height: 1.5; }
+.backup-state {
+  margin: 14px 0; padding: 12px 14px;
+  border: 2px dashed var(--line-strong); border-radius: var(--r-sm);
+  font-size: .8rem; line-height: 1.55; color: var(--muted);
+}
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-row .ghost { flex: 1 1 150px; }
+
+/* The sync key is meant to be read off one screen and typed into another, so it
+   is set large, spaced, and in the mono face the whole app already loads. */
+.sync-key {
+  margin: 14px 0; padding: 14px;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  background: var(--surface); box-shadow: 4px 4px 0 var(--stroke);
+  font-size: 1rem; letter-spacing: .08em; text-align: center;
+  word-break: break-all; user-select: all;
+}
+.sync-key[hidden] { display: none; }
+#sync-join {
+  width: 100%; margin: 14px 0; padding: 13px 14px;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 1rem; letter-spacing: .08em; text-align: center;
+}
+#sync-join[hidden] { display: none; }
+
+/* ── lightbox ────────────────────────────────────────────────────── */
+
+.lightbox {
+  position: fixed; inset: 0; z-index: 90;
+  background: #0a0a0b;
+  display: flex; flex-direction: column;
+}
+.lightbox[hidden] { display: none; }
+.lb-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  color: #e4e4e7;
+}
+.lb-title { flex: 1; font-size: .8rem; color: #a1a1aa; }
+.lb-bar .icon-btn { color: #e4e4e7; }
+.lb-bar .icon-btn:active, .lb-bar .icon-btn:hover { background: #232427; color: #fff; }
+.lb-stage {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: grid; place-items: center;
+  /* Both tracks must be able to shrink below their content, or the img's
+     max-height:100% resolves against the image's own height and a landscape
+     phone lays out a picture taller than the screen it is in. */
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  touch-action: none; background: #fff;
+}
+/* The white stage is right for a scanned-looking diagram and wrong for a
+   figure, which is ink on the app's own paper. */
+.lb-stage[data-kind="fig"] { background: var(--bg); }
+.lb-stage img {
+  max-width: 100%; max-height: 100%;
+  transform-origin: 0 0; will-change: transform;
+  user-select: none; -webkit-user-drag: none;
+}
+.lb-hint {
+  margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  text-align: center; color: #a1a1aa; font-size: .72rem;
+}
+
+/* ── boot + toast ────────────────────────────────────────────────── */
+
+/* Munin's own loading screen. A course replaces the scene inside .boot-scene
+ * with its own markup and brings its own stylesheet for it (courses/<id>/
+ * boot.html + boot.css), so the animation vocabulary is the course's too —
+ * these rules only dress the default raven. Nothing here is filled in by
+ * JavaScript: the screen has to be painted before app.js exists, which is the
+ * whole window it covers. */
+/* align-content, not just place-items: two children in a grid with no row
+ * template make two implicit rows, and rows stretch by default — which put the
+ * drawing a quarter down the screen, the line three quarters down, and left the
+ * gap below with nothing to sit between. The scene and its caption are one
+ * thing; they are centred as one. */
+.boot { position: fixed; inset: 0; display: grid; place-items: center;
+  align-content: center; color: var(--muted); gap: 12px;
+  background: var(--bg); z-index: 95;
+  transition: opacity 220ms ease; }
+/* Above everything the app puts on screen — the shelf pill is 80, the toast 70,
+ * the lightbox 60 — because the page behind is fully built before the screen
+ * comes down, and anything that outranks it appears ON the splash. The pill
+ * did: `courses` floated over the loading raven for the whole first second. */
+/* Held for SPLASH.hold in munin.js, then faded over SPLASH.fade — keep the two
+ * numbers together. The app is already behind it by then; this is what reveals
+ * it, so `hidden` may only be set once the fade has finished. */
+.boot.going { opacity: 0; pointer-events: none; }
+.boot[hidden] { display: none; }
+.boot p { font-size: .88rem; text-transform: lowercase; }
+/* Hidden until something has gone wrong. The screen is opaque and outranks the
+   `courses` pill, so this is the only control on it — and the only way back to
+   the other course when this one will not load. */
+#boot-back { margin-top: 4px; }
+.boot-scene { display: grid; place-items: center; }
+.boot-raven { width: 52px; height: 52px; color: var(--accent); animation: hop 2.4s ease-in-out infinite; }
+/* pathLength="1" renormalises the path whatever its real geometry, so one rule
+ * draws any drawing on — no measured length per doodle, and redrawing a doodle
+ * cannot silently break its own animation. */
+/* 600ms, under munin.js's 800ms hold: the raven finishes drawing itself before
+ * anything fades, which is the whole point of holding the screen. It was 1.5s
+ * back when the screen was gone in three frames and the duration was academic.
+ * A course's boot.css owns this number for its own scene — and has the same
+ * ceiling to fit under. */
+.boot-raven path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bootdraw .6s ease-out forwards; }
+@keyframes bootdraw { to { stroke-dashoffset: 0; } }
+/* Reduced motion leaves the drawing finished, not half-drawn. The splash is
+ * still held: a held screen is not motion, and the drawing is the point. */
+@media (prefers-reduced-motion: reduce) {
+  .boot { transition: none; }
+  .boot-raven { animation: none; }
+  .boot-raven path { stroke-dashoffset: 0; animation: none; }
+}
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 70;
+  max-width: calc(100vw - 40px);
+  background: var(--surface); color: var(--text);
+  border: var(--bw) solid var(--stroke); box-shadow: var(--sh-sm);
+  padding: 11px 16px; border-radius: var(--r-sm);
+  font-size: .84rem; line-height: 1.5;
+  transition: opacity .18s ease, transform .18s ease;
+}
+/* Never [hidden]: a live region that is display:none at the moment its text
+   changes is announced unreliably. It stays in the tree and hides visually. */
+.toast.away { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(6px); }
+
+/* ── wider screens ───────────────────────────────────────────────── */
+
+@media (min-width: 720px) {
+  .body, .searchbar, .top, .frieze { max-width: 680px; margin-inline: auto; width: 100%; }
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+  .btiles { grid-template-columns: repeat(3, 1fr); }
+  .sections { grid-template-columns: 1fr; }
+  .question { font-size: 1.7rem; }
+  .frieze .dood { flex-basis: 30px; width: 30px; }
+  .nav { padding-inline: max(0px, calc(50% - 340px)); }
+}
+
+/* ── cards that came out of a .apkg ──────────────────────────────────────────
+ *
+ * A Munin course writes its own markup and gets its pictures through the
+ * diagram plate. An imported card brings whatever its author wrote: pictures
+ * inline, audio, tables, ruby text, and cloze deletions. Its own fonts and
+ * colours were dropped at import — these rules are what is left to make a
+ * stranger's markup sit inside Munin's type without fighting it. */
+.question img, .answer img, .b-text img {
+  max-width: 100%; height: auto; margin: 6px 0; border-radius: var(--r-sm);
+}
+.question audio, .answer audio, .b-text audio {
+  width: 100%; max-width: 300px; height: 34px; margin: 6px 0; display: block;
+}
+/* The blank a cloze card is asking about, and the same words once it answers. */
+.question .cloze, .answer .cloze, .b-text .cloze { color: var(--accent); font-weight: 500; }
+.question .hint, .answer .hint { color: var(--muted); font-style: italic; }
+.question table, .answer table, .b-text table {
+  border-collapse: collapse; margin: 8px 0; font-size: .92em; display: block;
+  max-width: 100%; overflow-x: auto;
+}
+.question td, .question th, .answer td, .answer th, .b-text td, .b-text th {
+  border: 1px solid var(--stroke); padding: 4px 8px; text-align: left;
+}
+.question pre, .answer pre { white-space: pre-wrap; overflow-x: auto; font-size: .9em; }
+/* Lists and links are also part of the authored-course vocabulary since the
+ * 28 July 2026 schema ruling (course-source.md), so these two rules serve
+ * Browse rows as well as the study card. */
+.question ul, .question ol, .answer ul, .answer ol,
+.b-text ul, .b-text ol { margin: 6px 0; padding-left: 22px; text-align: left; }
+.question a, .answer a, .b-text a {
+  color: var(--accent); text-underline-offset: 3px;
+}
+.question blockquote, .answer blockquote {
+  margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--stroke); color: var(--muted);
+}
+.question ruby rt, .answer ruby rt { font-size: .6em; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

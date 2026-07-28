@@ -1,0 +1,17 @@
+/* competent-crew — how its loading screen moves. Its own keyframes: the animation
+ * vocabulary belongs to the course, not to Munin's stylesheet, or a course
+ * could only ever pick from the two names app.css happened to declare.
+ *
+ * The draw is .6s to fit under the 800ms the splash is held for (SPLASH.hold
+ * in munin.js): the drawing finishes drawing itself before the screen fades. */
+.boot-competent-crew { width: 52px; height: 52px; color: var(--accent);
+  animation: boot-competent-crew-move 2.2s ease-in-out infinite; }
+.boot-competent-crew path { stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: boot-competent-crew-draw .6s ease-out forwards; }
+@keyframes boot-competent-crew-draw { to { stroke-dashoffset: 0; } }
+@keyframes boot-competent-crew-move { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+/* Reduced motion leaves the drawing finished, not half-drawn. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-competent-crew, .boot-competent-crew path { animation: none; }
+  .boot-competent-crew path { stroke-dashoffset: 0; }
+}
