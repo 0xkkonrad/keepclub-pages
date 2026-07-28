@@ -228,6 +228,170 @@ function muninDoodle(name, cls, style) {
   return drawnAs(MUNIN_DOODLE[name] || MUNIN_DOODLE.perch, cls, style);
 }
 
+/* ── pull to refresh ───────────────────────────────────────────────────────
+ *
+ * The browser's native gesture is disabled in app.css: it is absent in iOS
+ * standalone mode and behaves differently across Android browsers. This is
+ * the same contract as peanut-ui's custom gesture — 70px arm, 120px visual
+ * ceiling, 80px while reloading — without adding a library to the offline
+ * shell.
+ *
+ * A fixed-screen app has several possible scroll surfaces. Only the visible
+ * one counts, and a dialog/lightbox never does: reloading halfway through an
+ * import or while panning a diagram is not a refresh gesture. */
+function initPullToRefresh() {
+  const DIST_THRESHOLD = 70;
+  const DIST_MAX = 120;
+  const DIST_RELOAD = 80;
+  const el = document.createElement('div');
+  el.className = 'pull-refresh';
+  el.id = 'pull-refresh';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<div class="pull-refresh-content">
+    <span class="pull-refresh-icon" aria-hidden="true">↓</span>
+    <span class="pull-refresh-text">pull down to refresh</span>
+  </div>`;
+  document.body.prepend(el);
+
+  const icon = el.querySelector('.pull-refresh-icon');
+  const text = el.querySelector('.pull-refresh-text');
+  let start = null;
+  let distance = 0;
+  let state = 'idle';
+  let resetTimer = null;
+  let reloadTimer = null;
+
+  const blocked = () => {
+    const boot = document.getElementById('boot');
+    return (boot && !boot.hidden)
+      || !!document.querySelector('.imp, .shelf.on[role="dialog"], .lightbox:not([hidden])');
+  };
+
+  const activeScroller = () => {
+    const shelf = document.querySelector('.shelf.on:not([role="dialog"])');
+    if (shelf) return shelf;
+    return [...document.querySelectorAll('.screen:not([hidden]) .body')]
+      .find((node) => node.getClientRects().length) || document.scrollingElement;
+  };
+
+  const canStart = (target) => {
+    if (blocked() || window.scrollY > 0) return false;
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, select, textarea, [contenteditable="true"]')) return false;
+    const scroller = activeScroller();
+    return !scroller || scroller.scrollTop <= 0;
+  };
+
+  // pulltorefreshjs's resistance function: the first part of the drag moves
+  // softly, a decisive pull crosses 70px, and no gesture opens more than 120px.
+  const resisted = (raw) => {
+    const extra = Math.max(0, raw);
+    return Math.min(1, extra / DIST_THRESHOLD / 2.5) * Math.min(DIST_MAX, extra);
+  };
+
+  const setDistance = (next, dragging) => {
+    distance = Math.max(0, Math.min(DIST_MAX, next));
+    document.documentElement.style.setProperty('--pull-refresh-distance', distance + 'px');
+    document.body.classList.toggle('pull-refresh-active', distance > 0);
+    document.body.classList.toggle('pull-refresh-dragging', !!dragging);
+    el.classList.toggle('on', distance > 0);
+    el.classList.toggle('dragging', !!dragging);
+    el.setAttribute('aria-hidden', distance > 0 ? 'false' : 'true');
+  };
+
+  const say = (next) => {
+    state = next;
+    el.classList.toggle('ready', next === 'ready');
+    el.classList.toggle('refreshing', next === 'refreshing');
+    if (next === 'ready') {
+      icon.textContent = '↓';
+      text.textContent = 'release to refresh';
+    } else if (next === 'refreshing') {
+      icon.textContent = '↻';
+      text.textContent = 'refreshing…';
+    } else if (next === 'blocked') {
+      icon.textContent = '!';
+      text.textContent = 'progress is not saved — refresh stopped';
+    } else {
+      icon.textContent = '↓';
+      text.textContent = 'pull down to refresh';
+    }
+  };
+
+  const reset = (delay = 0) => {
+    clearTimeout(resetTimer);
+    const finish = () => {
+      start = null;
+      say('idle');
+      setDistance(0, false);
+    };
+    if (delay) resetTimer = setTimeout(finish, delay);
+    else finish();
+  };
+
+  const safeToReload = () => {
+    if (typeof globalThis.writeNow !== 'function') return true;
+    try { return globalThis.writeNow() !== false; }
+    catch (e) { console.error(e); return false; }
+  };
+
+  addEventListener('touchstart', (e) => {
+    if (state === 'refreshing' || e.touches.length !== 1 || !canStart(e.target)) return;
+    clearTimeout(resetTimer);
+    const touch = e.touches[0];
+    start = { id: touch.identifier, x: touch.clientX, y: touch.clientY, moved: false };
+  }, { passive: true });
+
+  addEventListener('touchmove', (e) => {
+    if (!start || state === 'refreshing') return;
+    const touch = Array.from(e.touches).find((point) => point.identifier === start.id);
+    if (!touch) { reset(); return; }
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (!start.moved && Math.abs(dx) > Math.max(8, dy)) { reset(); return; }
+    if (dy <= 0) {
+      if (distance) setDistance(0, true);
+      return;
+    }
+    start.moved = true;
+    if (e.cancelable) e.preventDefault();
+    const next = resisted(dy);
+    setDistance(next, true);
+    say(next > DIST_THRESHOLD ? 'ready' : 'pulling');
+  }, { passive: false });
+
+  const finish = () => {
+    if (!start || state === 'refreshing') return;
+    start = null;
+    document.body.classList.remove('pull-refresh-dragging');
+    el.classList.remove('dragging');
+    if (state !== 'ready' || distance <= DIST_THRESHOLD) {
+      reset();
+      return;
+    }
+    if (!safeToReload()) {
+      say('blocked');
+      setDistance(DIST_RELOAD, false);
+      reset(1400);
+      return;
+    }
+    say('refreshing');
+    setDistance(DIST_RELOAD, false);
+    // Let the promised state paint before navigation. As in peanut-ui, do not
+    // resolve back to idle: Android could otherwise arm a second pull while
+    // the old document is still leaving.
+    reloadTimer = setTimeout(() => location.reload(), 300);
+  };
+
+  addEventListener('touchend', finish, { passive: true });
+  addEventListener('touchcancel', () => {
+    if (state !== 'refreshing') reset();
+  }, { passive: true });
+  addEventListener('pagehide', () => clearTimeout(reloadTimer));
+}
+
 /* The theme toggle's three states, from Munin's chrome set rather than the
  * raven set — see design/raven-doodles/build.py for why those are two objects.
  * The Unicode fallback is not decoration: this runs before first paint, and a
@@ -1069,7 +1233,7 @@ async function renderShelf(asOverlay, say) {
       ${asOverlay ? `<button type="button" class="icon-btn shelf-x" id="shelf-x"
         aria-label="Close" title="Close">✕</button>` : ''}
     </div>
-    <p class="shelf-sub">spaced repetition that doesn't make you learn the app first</p>
+    <p class="shelf-sub">membership pays in memories.</p>
     <div class="shelf-tiles">
       ${say ? `<div class="shelf-tile broken">${muninDoodle('peek')}
         <span><b>${escHtml(say)}</b><small>pick one below to carry on</small></span></div>` : ''}
@@ -1385,6 +1549,7 @@ addEventListener('popstate', () => {
 
 (function main() {
   MuninTheme.apply();
+  initPullToRefresh();
   registerWorker();
   watchBoot();
   const known = (id) => MUNIN.idOk(id) || isLocal(id);
