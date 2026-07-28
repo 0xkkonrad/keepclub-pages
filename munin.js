@@ -921,7 +921,14 @@ const SHELF_CSS = `
   .shelf-mark .icon-btn { margin-left: auto; }
   /* The overlay's way out sits beside the theme button, not away from it. */
   .shelf-mark .shelf-x { margin-left: 0; }
-  .shelf-sub { color: var(--muted); font-size: .84rem; margin: 0 0 22px; }
+  .shelf-intro { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; }
+  .shelf-sub { flex: 1; color: var(--muted); font-size: .84rem; margin: 0; }
+  .shelf-share { flex: none; min-width: 88px; min-height: var(--tap); padding: 0 12px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: .78rem;
+    text-transform: lowercase; cursor: pointer; border: var(--bw) solid var(--stroke);
+    border-radius: 99px; box-shadow: var(--sh-sm); }
+  .shelf-share:disabled { color: var(--muted); }
+  .shelf-share:active:not(:disabled) { box-shadow: none; transform: translate(2px, 2px); }
   .shelf-tiles { display: flex; flex-direction: column; gap: 14px; }
   .shelf-tile { display: flex; align-items: center; gap: 12px; text-align: left;
     background: var(--surface); color: inherit; font: inherit; cursor: pointer;
@@ -1177,6 +1184,70 @@ function localTile(d) {
   </div>`;
 }
 
+/** Share the app's course selector, never a deep link or anyone's local data. */
+function shelfShareUrl() {
+  return new URL('./', location.href).href;
+}
+
+async function copyShelfLink(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  // Older WebViews can share neither natively nor through the async clipboard.
+  // Keep the last fallback local and short-lived; no link is left in the DOM.
+  const field = document.createElement('textarea');
+  field.value = value;
+  field.readOnly = true;
+  field.style.position = 'fixed';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand?.('copy');
+  field.remove();
+  if (!copied) throw new Error('copy unavailable');
+}
+
+async function shareShelf(button, status) {
+  const data = {
+    title: 'keep club',
+    text: 'membership pays in memories.',
+    url: shelfShareUrl(),
+  };
+  const say = (message) => {
+    clearTimeout(button._shareReset);
+    button.textContent = message;
+    status.textContent = message === 'copied' ? 'Link copied.' : `${message}.`;
+    button._shareReset = setTimeout(() => {
+      button.textContent = 'share';
+      status.textContent = '';
+    }, 2200);
+  };
+
+  button.disabled = true;
+  try {
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share(data);
+        say('shared');
+        return;
+      } catch (e) {
+        // Closing the system sheet is a choice, not an error that needs a
+        // warning or an unsolicited clipboard write.
+        if (e?.name === 'AbortError') return;
+      }
+    }
+    await copyShelfLink(data.url);
+    say('copied');
+  } catch (e) {
+    console.error(e);
+    say('try again');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /** The picker. `asOverlay` puts it in front of an open course; `say` is what
  *  went wrong on the way here, drawn where the tiles are. */
 async function renderShelf(asOverlay, say) {
@@ -1233,7 +1304,11 @@ async function renderShelf(asOverlay, say) {
       ${asOverlay ? `<button type="button" class="icon-btn shelf-x" id="shelf-x"
         aria-label="Close" title="Close">✕</button>` : ''}
     </div>
-    <p class="shelf-sub">membership pays in memories.</p>
+    <div class="shelf-intro">
+      <p class="shelf-sub">membership pays in memories.</p>
+      <button type="button" class="shelf-share" id="shelf-share">share</button>
+      <span class="sr" id="shelf-share-status" role="status" aria-live="polite"></span>
+    </div>
     <div class="shelf-tiles">
       ${say ? `<div class="shelf-tile broken">${muninDoodle('peek')}
         <span><b>${escHtml(say)}</b><small>pick one below to carry on</small></span></div>` : ''}
@@ -1255,6 +1330,8 @@ async function renderShelf(asOverlay, say) {
   </div>`;
   document.body.appendChild(el);
   el.querySelector('#shelf-theme').addEventListener('click', () => MuninTheme.cycle());
+  el.querySelector('#shelf-share').addEventListener('click', (e) =>
+    shareShelf(e.currentTarget, el.querySelector('#shelf-share-status')));
   el.querySelector('#shelf-install-btn').addEventListener('click', () => MuninInstall.prompt());
   MuninTheme.apply();
   renderShelfInstall();
