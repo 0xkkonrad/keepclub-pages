@@ -42,7 +42,7 @@ const MUNIN = {
   /* Munin's own theme: the default for every slot a course leaves empty. */
   theme: {
     accent: { light: '#0e3f39', dark: '#35917f', inkLight: '#fffdf7', inkDark: '#141519' },
-    boot: { art: 'perch', line: 'Loading…' },
+    boot: { art: 'tower', line: 'Loading…' },
     fallback: 'perch',
     /* Ten of them, named. The frieze is ten drawings and no more — that is
      * what fits a 320px screen without a sideways scrollbar — so it cannot be
@@ -593,7 +593,7 @@ async function startCourse(c, loadDoodles) {
   injectAccent(c.accent);
   const line = document.getElementById('boot-line');
   if (line && c.boot.line) line.textContent = c.boot.line;
-  document.title = 'Munin — ' + c.title;
+  document.title = 'keep club — ' + c.title;
   // A course that draws figures brings the stylesheet for them: its own nouns
   // — rigging, fenders, pontoons — used to be fifty rules in app.css, applied
   // over every deck including the ones about German verbs.
@@ -1018,7 +1018,7 @@ function localTile(d) {
 async function renderShelf(asOverlay, say) {
   if (!asOverlay) {
     injectAccent(MUNIN.theme.accent);
-    document.title = 'Munin';
+    document.title = 'keep club';
   }
   ensureShelfCss();
 
@@ -1063,13 +1063,13 @@ async function renderShelf(asOverlay, say) {
     el.setAttribute('aria-label', 'Courses');
   }
   el.innerHTML = `<div class="shelf-inner">
-    <div class="shelf-mark">${muninDoodle('perch')}<h1>munin</h1>
+    <div class="shelf-mark">${muninDoodle('tower')}<h1>keep club</h1>
       <button type="button" class="icon-btn" id="shelf-theme" aria-label="Switch colour theme"
         title="Switch colour theme"><span aria-hidden="true" data-theme-glyph></span></button>
       ${asOverlay ? `<button type="button" class="icon-btn shelf-x" id="shelf-x"
         aria-label="Close" title="Close">✕</button>` : ''}
     </div>
-    <p class="shelf-sub">a friendly raven who remembers for you</p>
+    <p class="shelf-sub">spaced repetition that doesn't make you learn the app first</p>
     <div class="shelf-tiles">
       ${say ? `<div class="shelf-tile broken">${muninDoodle('peek')}
         <span><b>${escHtml(say)}</b><small>pick one below to carry on</small></span></div>` : ''}
@@ -1248,7 +1248,7 @@ function mountShelfButton(c) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'shelf-btn';
-  b.innerHTML = muninDoodle('perch') + '<span>courses</span>';
+  b.innerHTML = muninDoodle('tower') + '<span>courses</span>';
   b.addEventListener('click', async () => {
     if (shelfOpening || document.querySelector('.shelf.on[role="dialog"]')) return;
     shelfOpening = true;

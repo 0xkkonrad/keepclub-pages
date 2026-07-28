@@ -1,8 +1,8 @@
 {
   "id": "/munin/",
-  "name": "Munin",
-  "short_name": "Munin",
-  "description": "Spaced repetition that doesn't make you learn the app first. Pick a course; a friendly raven remembers for you. Works offline.",
+  "name": "keep club",
+  "short_name": "keep club",
+  "description": "Spaced repetition that doesn't make you learn the app first. Pick a course; keep your progress on your device. Works offline.",
   "lang": "en-GB",
   "dir": "ltr",
   "start_url": "./",
