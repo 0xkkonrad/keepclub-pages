@@ -2,7 +2,7 @@
   "id": "/munin/",
   "name": "keep club",
   "short_name": "keep club",
-  "description": "Spaced repetition that doesn't make you learn the app first. Pick a course; keep your progress on your device. Works offline.",
+  "description": "Membership pays in memories. Pick a course, keep your progress and study offline.",
   "lang": "en-GB",
   "dir": "ltr",
   "start_url": "./",

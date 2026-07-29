@@ -62,7 +62,7 @@
   "flag",
   "compass"
  ],
- "notice": "Revision material, not a substitute for the course, the current almanac or an up-to-date chart. Progress is stored on this device only.",
+ "notice": "Revision material, not a substitute for the course, the current almanac or an up-to-date chart. Progress stays here unless you turn on Sync.",
  "figures": {
   "noPen": [
    "f-sail",

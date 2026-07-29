@@ -930,7 +930,7 @@ function wireVideo(rootSel) {
   });
 }
 
-/* ─────────────────────── the hoard ─────────────────────── */
+/* ─────────────────────── milestones ─────────────────────── */
 
 /* Every word below is a course's where a course cares and Munin's where it
  * does not, so every one is taken only when it is the kind of thing it is
@@ -975,7 +975,7 @@ const ACHIEVEMENTS = HOARD.map((a) => {
   return Object.assign({}, a, { t: str(o.t, a.t), d: str(o.d, a.d), art: str(o.art, a.art) });
 });
 const ACH_IDS = new Set(ACHIEVEMENTS.map((a) => a.id));
-const HOARD_TITLE = str(COURSE.hoard && COURSE.hoard.title, 'The hoard');
+const HOARD_TITLE = str(COURSE.hoard && COURSE.hoard.title, 'Milestones');
 
 /** Everything the tests above need, worked out once per answer. 537 cards is
  *  cheap enough to walk; keeping partial counters in state would be one more
@@ -2542,12 +2542,18 @@ function renderSyncState() {
   if (!line || !globalThis.DSSync) return;
   const s = DSSync.status();
 
-  if (!s.on) {
-    // Munin ships with sync off until the parity gate (see munin.js): no
-    // buttons that would silently do nothing.
-    line.textContent = 'Sync arrives with a later Munin build. Your progress is on this device only.';
+  if (s.available === false) {
+    line.textContent = 'Built-in courses can sync progress. Imported decks stay on this device.';
     keyEl.hidden = true;
     acts.innerHTML = '';
+    return;
+  }
+
+  if (!s.on) {
+    line.textContent = 'Sync is off. Your progress is on this device only.';
+    keyEl.hidden = true;
+    acts.innerHTML = '<button class="ghost" data-sync="new">Turn on sync</button>'
+      + '<button class="ghost" data-sync="join">Use a key from another device</button>';
     return;
   }
 
@@ -3694,6 +3700,8 @@ async function boot() {
 
   if (globalThis.DSSync) {
     DSSync.init({
+      app: COURSE.id,
+      supported: !/^local-[a-z0-9]+$/.test(COURSE.id),
       // The blob has been through a network and a database since we wrote it,
       // so it comes in through the same front door as a restored backup file.
       sanitise,

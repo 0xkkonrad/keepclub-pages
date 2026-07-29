@@ -12,10 +12,10 @@
  * course had to be registered — and the one you find last, because forgetting
  * it ships a course that works online and 404s offline.
  *
- * BUILD is stamped by scripts/deploy-to-kkonrad.sh from the content actually
+ * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: '1e97dc1813', courses: { 'day-skipper': '6b322ca06d', 'competent-crew': '593597f64b' } };
+const BUILD = { shell: '3cf52749c7', courses: { 'day-skipper': '414a4cb020', 'competent-crew': 'cd7c69cb93' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -108,6 +108,7 @@ const SHELL = [
   'index.html',
   'app.css',
   'app.js',
+  'sync.js',
   'munin.js',
   'doodles-munin.js',
   // The importer and its parsers. Loaded only when someone brings a deck, and

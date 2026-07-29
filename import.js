@@ -134,7 +134,7 @@ export function openImporter() {
   draggable ? '' : '<small>your cards stay on this device</small>'}</button>
       <input type="file" accept=".apkg,.colpkg,application/zip" hidden id="imp-input">
       <p class="imp-how">in anki: <b>File → Export</b>, choose <b>Anki Deck Package</b>, and
-        include scheduling or not — it makes no difference, Munin starts every card new.
+        include scheduling or not — it makes no difference, keep club starts every card new.
         Both the current format and the older one are read.</p>`;
     const input = body.querySelector('#imp-input');
     input.addEventListener('change', () => { if (input.files[0]) go(input.files[0]); });
@@ -234,7 +234,7 @@ export function openImporter() {
     }
     if (!v.ok) {
       console.error('built deck:', v.errors);
-      fail('that deck came out in a shape Munin cannot study', v.errors[0]);
+      fail('that deck came out in a shape keep club cannot study', v.errors[0]);
       return;
     }
 
@@ -246,8 +246,8 @@ export function openImporter() {
       existing = match(await store.list(), built);
     } catch (e) {
       console.error(e);
-      fail('this browser will not let Munin store anything',
-        'private windows and some managed browsers block the local database Munin keeps decks in.');
+      fail('this browser will not let keep club store anything',
+        'private windows and some managed browsers block the local database keep club keeps decks in.');
       return;
     }
     body.innerHTML = receiptHtml(built.receipt, existing);

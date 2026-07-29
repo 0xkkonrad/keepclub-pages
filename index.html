@@ -105,7 +105,7 @@
            the default. Filled by renderNotice(); the markup carries the
            default so the page says something sane before app.js runs. -->
       <p class="fineprint" id="notice">
-        Revision material. Progress is stored on this device only.
+        Revision material. Progress stays here unless you turn on Sync.
       </p>
     </main>
   </section>
@@ -249,11 +249,10 @@
       </p>
       <div id="mastery"></div>
 
-      <!-- Munin calls this the hoard — a raven's. A course may call it
-           something in its own world (Day Skipper's is a ship's log) through
-           course.json's `hoard.title`, and rename and redraw the fourteen
-           entries under it; the rules that unlock them are Munin's. -->
-      <h2 class="h-sect" id="hoard-title">The hoard</h2>
+      <!-- The generic achievement set is Milestones. A course may call it
+           something in its own world (the sailing courses use Ship's log)
+           through course.json's legacy `hoard.title` field. -->
+      <h2 class="h-sect" id="hoard-title">Milestones</h2>
       <p class="ach-count" id="ach-count"></p>
       <ul class="ach" id="ach-list"></ul>
 
@@ -335,7 +334,7 @@
           <a id="about-author" href="https://kkonrad.com/" target="_blank"
              rel="author noopener noreferrer">kkonrad</a>.
         </p>
-        <p><a id="about-source" href="https://github.com/0xkkonrad/munin"
+        <p><a id="about-source" href="https://github.com/0xkkonrad/keepclub"
               target="_blank" rel="noopener noreferrer">source code on github</a></p>
         <p class="about-build" id="build-line"></p>
       </div>
@@ -405,8 +404,10 @@
   </span>
 </div>
 
-<!-- Before app.js: the sync module only defines things, and app.js wires it up
-     on boot, so it has to already be there. -->
+<!-- Before app.js: sync and the shell define the globals the review engine
+     wires up when a course opens. The filenames stay for install/storage
+     compatibility; they are not the public brand. -->
+<script src="sync.js"></script>
 <script src="doodles-munin.js"></script>
 <script src="munin.js"></script>
 </body>

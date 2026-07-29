@@ -1,4 +1,4 @@
-/* Munin — the shell in front of the courses.
+/* keep club — the shell in front of the courses.
  *
  * Boot order: this file decides which course is active (localStorage), replays
  * that course's cached loading screen before the first paint, fetches its
@@ -15,10 +15,8 @@
  * accent and no frieze gets its accent and Munin's frieze; a deck someone
  * imported brings none of it and is dressed entirely by Munin.
  *
- * Sync is deliberately OFF in this build. The live Day Skipper app at
- * /day-skipper shares this origin and its Supabase rows; Munin joining that
- * sync before the parity gate would corrupt real study state. DSSync below is
- * a stub with the full surface app.js touches.
+ * The MUNIN object and munin/... storage names are compatibility identifiers,
+ * not the public brand. Existing installs and review histories depend on them.
  */
 'use strict';
 
@@ -50,27 +48,31 @@ const MUNIN = {
      * hoard needed fourteen distinct drawings. The gate keeps this a subset. */
     friezeArt: ['perch', 'peek', 'flap', 'carry', 'roost',
       'hoard', 'puff', 'strut', 'quill', 'bow'],
-    notice: 'Revision material. Progress is stored on this device only.',
+    notice: 'Revision material. Progress stays here unless you turn on Sync.',
   },
 };
 globalThis.MUNIN = MUNIN;
 
 const isLocal = (id) => /^local-[a-z0-9]+$/.test(String(id || ''));
 
-/* app.js calls these; every one is a no-op that reports "sync off". */
-globalThis.DSSync = {
-  KEY: 'munin/sync-off',
-  enabled: () => false,
-  status: () => ({}),
-  schedule: () => {},
-  sync: async () => {},
-  stable: (s) => JSON.stringify(s),
-  formatKey: () => '—',
-  normaliseKey: (k) => k,
-  init: () => {},
-  turnOn: () => {},
-  turnOff: () => {},
-};
+/* A partial deploy must fail closed. sync.js normally defines this first; the
+ * fallback keeps progress local and makes the unavailable state explicit. */
+if (!globalThis.DSSync) {
+  globalThis.DSSync = {
+    KEY: 'munin/sync-off',
+    KEY_CHARS: 25,
+    enabled: () => false,
+    status: () => ({ on: false, available: false }),
+    schedule: () => {},
+    sync: async () => {},
+    stable: (s) => JSON.stringify(s),
+    formatKey: () => '—',
+    normaliseKey: () => null,
+    init: () => {},
+    turnOn: () => null,
+    turnOff: () => {},
+  };
+}
 
 /* The colour theme belongs to Munin, not to a course: the shelf paints before
  * any course is booted, and a preference stored per course would flip as you
@@ -1603,6 +1605,152 @@ function enterCourse(id) {
 }
 MUNIN.enter = enterCourse;
 
+/* ── one-time move from kkonrad.com/munin ────────────────────────────────
+ *
+ * localStorage and IndexedDB are origin-scoped, so a redirect alone would
+ * strand progress on kkonrad.com. The retirement page opens keepclub.app with
+ * a random fragment token, waits for this handshake, then sends only this
+ * app's state and imported decks. The fragment never reaches either server.
+ */
+async function importLegacyPayload(payload) {
+  const decks = Array.isArray(payload && payload.decks) ? payload.decks : [];
+  const remap = {};
+  let imported = 0;
+
+  if (decks.length) {
+    const store = await import('./lib/store.js');
+    const taken = new Set((await store.list()).map((deck) => deck.id));
+    for (const bundle of decks) {
+      const record = bundle && bundle.record;
+      const oldId = record && record.id;
+      if (!/^local-[a-z0-9]+$/.test(String(oldId || ''))
+          || !record.deck || !Array.isArray(record.deck.cards)) continue;
+
+      let id = oldId;
+      const existing = await store.meta(id);
+      if (existing) {
+        const theirs = new Set(Array.isArray(existing.ids) ? existing.ids : []);
+        const mine = Array.isArray(record.ids) ? record.ids : [];
+        const overlap = mine.filter((card) => theirs.has(card)).length;
+        const sameDeck = overlap && overlap >= Math.min(theirs.size, mine.length) / 2;
+        if (!sameDeck) {
+          do {
+            id = 'local-' + Date.now().toString(36)
+              + Math.floor(Math.random() * 1296).toString(36).padStart(2, '0');
+          } while (taken.has(id));
+        }
+      }
+      taken.add(id);
+      remap[oldId] = id;
+
+      const media = (Array.isArray(bundle.media) ? bundle.media : [])
+        .filter((item) => Number.isInteger(Number(item.i)) && item.bytes)
+        .map((item) => ({
+          i: Number(item.i),
+          name: String(item.name || ''),
+          kind: String(item.kind || ''),
+          bytes: item.bytes instanceof Uint8Array
+            ? item.bytes
+            : new Uint8Array(item.bytes),
+        }));
+      await store.put(Object.assign({}, record, { id }), media);
+      imported++;
+    }
+  }
+
+  let histories = 0;
+  const entries = Array.isArray(payload && payload.local) ? payload.local : [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    let [key, value] = entry;
+    if (key === MUNIN.lastKey) continue; // land on the shelf and show the receipt
+
+    const stateMatch = /^munin\/(local-[a-z0-9]+|[a-z0-9][a-z0-9-]{0,63})\/state\/v1$/.exec(key);
+    if (stateMatch) {
+      const id = remap[stateMatch[1]] || stateMatch[1];
+      key = MUNIN.stateKey(id);
+      let incoming, current;
+      try {
+        incoming = JSON.parse(value);
+        current = JSON.parse(localStorage.getItem(key) || 'null');
+      } catch (e) {
+        continue;
+      }
+      localStorage.setItem(key, JSON.stringify(DSSync.mergeState(current, incoming)));
+      histories++;
+      continue;
+    }
+
+    // Theme and sync identity are global device choices. Keep a choice already
+    // made on keepclub.app; otherwise carry the old one across.
+    if ((key === MuninTheme.key || key === DSSync.KEY)
+        && localStorage.getItem(key) === null) {
+      localStorage.setItem(key, value);
+    }
+  }
+
+  return { histories, imported };
+}
+
+function receiveLegacyMigration() {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const token = params.get('move');
+  const source = window.opener;
+  const legacyOrigin = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+    ? 'http://127.0.0.1:8766'
+    : 'https://kkonrad.com';
+  if (!source || !/^[A-Za-z0-9_-]{16,128}$/.test(String(token || ''))) {
+    return Promise.resolve('');
+  }
+
+  return new Promise((resolve) => {
+    const finish = (message) => {
+      removeEventListener('message', onMessage);
+      clearTimeout(timeout);
+      const url = new URL(location.href);
+      url.hash = '';
+      history.replaceState(history.state, '', url.pathname + url.search);
+      resolve(message);
+    };
+    const onMessage = async (event) => {
+      if (event.origin !== legacyOrigin || event.source !== source
+          || event.data?.type !== 'keepclub:migration'
+          || event.data?.token !== token) return;
+      try {
+        const result = await importLegacyPayload(event.data.payload);
+        source.postMessage({
+          type: 'keepclub:migration-complete',
+          token,
+          result,
+        }, legacyOrigin);
+        const parts = [];
+        if (result.histories) {
+          parts.push(`${result.histories} progress ${result.histories === 1 ? 'record' : 'records'}`);
+        }
+        if (result.imported) {
+          parts.push(`${result.imported} imported ${result.imported === 1 ? 'deck' : 'decks'}`);
+        }
+        finish(parts.length
+          ? `moved ${parts.join(' and ')} from kkonrad.com`
+          : 'there was no keep club progress to move');
+      } catch (error) {
+        console.error('legacy migration:', error);
+        source.postMessage({
+          type: 'keepclub:migration-failed',
+          token,
+          error: error && error.message ? error.message : 'move failed',
+        }, legacyOrigin);
+        finish('the move could not finish — your original data is still safe on kkonrad.com');
+      }
+    };
+    addEventListener('message', onMessage);
+    const timeout = setTimeout(() => {
+      finish('the move timed out — your original data is still safe on kkonrad.com');
+    }, 120000);
+    source.postMessage({ type: 'keepclub:migration-ready', token }, legacyOrigin);
+  });
+}
+
 /* Back out of a course, and Forward back into it.
  *
  * The press lands on the entry underneath without loading anything — the shell
@@ -1624,7 +1772,8 @@ addEventListener('popstate', () => {
   else history.back();
 });
 
-(function main() {
+(async function main() {
+  const migrationSay = await receiveLegacyMigration();
   MuninTheme.apply();
   initPullToRefresh();
   registerWorker();
@@ -1644,7 +1793,7 @@ addEventListener('popstate', () => {
    * one address the whole app lives at. A cold open has no entry state at all
    * and still resumes; a deep link says what it wants out loud and wins. */
   const backToShelf = !q && !!(history.state && history.state.munin === 'shelf');
-  const target = backToShelf ? null : (q && known(q) ? q : stored);
+  const target = migrationSay ? null : (backToShelf ? null : (q && known(q) ? q : stored));
 
   /* ONE SHOT, and this is where it is spent. Entering a course is a reload,
    * which keeps the query string, so a parameter left in the address bar beat
@@ -1704,6 +1853,6 @@ addEventListener('popstate', () => {
       });
   } else {
     place('shelf');
-    renderShelf(false, q ? missing(q) : '').catch(console.error);
+    renderShelf(false, migrationSay || (q ? missing(q) : '')).catch(console.error);
   }
-})();
+})().catch(console.error);
