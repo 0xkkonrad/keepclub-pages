@@ -30,7 +30,7 @@
     <nav class="side" aria-label="Documentation">
       <strong>Start here</strong>
       <a href="#quick-start">Smallest course</a>
-      <a href="#optional-by-default">Optional by default</a>
+      <a href="#optional-by-default">What is required</a>
       <a href="#cards">Card examples</a>
       <strong>Authoring</strong>
       <a href="#markdown">Markdown</a>
@@ -40,7 +40,7 @@
       <strong>Reference</strong>
       <a href="#fields">Field tables</a>
       <a href="#identity">IDs and progress</a>
-      <a href="#tooling">Bring your own tools</a>
+      <a href="#tooling">Editors and generators</a>
       <a href="#evolution">Extensions and evolution</a>
       <a href="reference/errors/">Diagnostic codes</a>
       <a href="schema/course-v2.schema.json">JSON Schema ↧</a>
@@ -59,11 +59,11 @@
         </nav>
       </details>
 
-      <p class="eyebrow">Public course format · version 2</p>
-      <h1>Bring your own tools. Ship clear cards.</h1>
-      <p class="lede">A keep club course is plain, readable YAML. Start with two
-        prompts and nothing else. Add answers, organization, attribution,
-        media, or visual identity only when they help.</p>
+      <p class="eyebrow">Course format 2</p>
+      <h1>Creating a course</h1>
+      <p class="lede">Courses are plain YAML files. You can start with a couple
+        of prompts, then add answers, sections, media, or other details if you
+        need them.</p>
       <div class="actions">
         <a class="button" href="#quick-start">Make the smallest course</a>
         <a class="button secondary" href="schema/course-v2.schema.json"
@@ -72,19 +72,19 @@
 
       <div class="principles" aria-label="Format principles">
         <article>
-          <h2>One course, not two layers</h2>
-          <p>There is no “simple” and “advanced” format. Optional fields extend
-            the same course object.</p>
+          <h2>Start small</h2>
+          <p>The same format works for a two-card course and a large course.
+            Add optional fields as you need them.</p>
         </article>
         <article>
-          <h2>Human names at the boundary</h2>
-          <p>Creators write <code>courseId</code>, <code>cardId</code>,
-            <code>front</code>, and <code>back</code>—not runtime abbreviations.</p>
+          <h2>Readable field names</h2>
+          <p>The public fields have names such as <code>courseId</code>,
+            <code>cardId</code>, <code>front</code>, and <code>back</code>.</p>
         </article>
         <article>
-          <h2>Progress stays out</h2>
-          <p>A course contains material and presentation. Scheduling state
-            belongs to the learner and is never part of the artifact.</p>
+          <h2>Course files contain content</h2>
+          <p>Review history, due dates, and other learner data are stored by
+            the app, not in the course file.</p>
         </article>
       </div>
 
@@ -100,28 +100,28 @@ cards:
 
   - cardId: recall-the-day
     front: Recall three things you learned today.</code></pre>
-        <p>That is a complete course. It has two front-only cards, no theme,
-          no sections, and no title. keep club derives a display title from
+        <p>This is a complete course with two front-only cards. It has no theme,
+          sections, or title. keep club derives a display title from
           <code>daily-prompts</code>, creates one “All cards” section, and uses
           the app’s normal tower and colors.</p>
 
         <ol class="steps">
-          <li><strong>Choose stable IDs.</strong> Use lowercase names you will
-            not need to change when wording changes.</li>
-          <li><strong>Write the prompts.</strong> Each record is one review
-            card. Add <code>back</code> only when there is something to reveal.</li>
-          <li><strong>Keep it as YAML.</strong> Text-only courses are just this
-            file. If you add local media, put the file and assets into a
+          <li><strong>Pick stable IDs.</strong> Use lowercase names that can
+            stay the same if you edit the wording later.</li>
+          <li><strong>Add the prompts.</strong> Each item under
+            <code>cards</code> is one review card. Add a <code>back</code> when
+            the card has an answer to reveal.</li>
+          <li><strong>Save the YAML file.</strong> That is all a text-only
+            course needs. For local media, put the YAML file and assets in a
             <code>.keep</code> ZIP.</li>
-          <li><strong>Preview before keeping.</strong> Errors block the whole
-            course. Warnings explain defaults and quality concerns before you
-            continue.</li>
+          <li><strong>Preview the import.</strong> Errors stop the import.
+            Warnings show defaults and possible content problems.</li>
         </ol>
       </section>
 
       <section id="optional-by-default">
-        <h2>Optional by default</h2>
-        <p>The minimal contract is intentionally small:</p>
+        <h2>What is required</h2>
+        <p>A valid course needs only:</p>
         <ul>
           <li>a course has <code>schemaVersion: 2</code>, a stable
             <code>courseId</code>, and at least one card;</li>
@@ -130,18 +130,19 @@ cards:
           <li>everything else can be omitted.</li>
         </ul>
         <div class="callout">
-          <p><strong>Omit what you do not mean.</strong> You do not need empty
-            arrays, blank theme values, placeholder sections, or a
-            <code>back: ""</code>. A blank back is accepted for forgiving
-            tooling, but it warns and normalizes to no back.</p>
+          <p><strong>Leave optional fields out when you do not use them.</strong>
+            You do not need empty arrays, blank theme values, placeholder
+            sections, or <code>back: ""</code>. An empty back is accepted, but
+            the importer warns about it and treats the card as front-only.</p>
         </div>
-        <p>Strong defaults never rescue malformed values. An absent
-          <code>title</code> gets a useful default; a present title of the wrong
+        <p>Missing optional fields get defaults where appropriate. Invalid
+          values still produce errors. For example, keep club can make a title
+          when <code>title</code> is missing, but a title with the wrong data
           type is an error.</p>
       </section>
 
       <section id="cards">
-        <h2>What one card means</h2>
+        <h2>Cards</h2>
         <p>One record is one scheduled review card. Format 2 starts with one
           primitive: front → optional back. It does not generate multiple
           review directions from a note.</p>
@@ -158,9 +159,8 @@ cards:
 
   - cardId: name-three
     front: Name three knots you can tie without looking.</code></pre>
-        <p>The first card reveals an answer. The second is front-only: there is
-          no empty answer screen to click through, so the learner proceeds
-          directly to self-grading.</p>
+        <p>The first card reveals an answer. The second is front-only, so it
+          goes directly to self-grading instead of showing an empty answer.</p>
 
         <h3>A course with optional organization</h3>
 <pre data-course-example><code>schemaVersion: 2
@@ -207,14 +207,14 @@ cards:
             </tbody>
           </table>
         </div>
-        <p>Rendered output is sanitized before storage. A hostile link keeps
-          its readable label but cannot be clicked. Inline HTML is escaped
-          visibly rather than silently disappearing.</p>
+        <p>keep club sanitizes rendered Markdown before storing it. Unsafe
+          links keep their labels but are not clickable. Inline HTML appears
+          as text.</p>
       </section>
 
       <section id="organization">
         <h2>Sections, groups, and tags</h2>
-        <p>Organization is additive:</p>
+        <p>You can leave out sections, groups, and tags. If you use them:</p>
         <ul>
           <li><strong>No sections:</strong> keep club derives one
             <code>all-cards</code> section.</li>
@@ -276,24 +276,23 @@ cards:
       </section>
 
       <section id="validation">
-        <h2>Validation is three separate questions</h2>
+        <h2>How validation works</h2>
         <ol class="steps">
-          <li><strong>Can it be read?</strong> Safe YAML 1.2, known fields,
-            types, lengths, and shape. Duplicate keys, aliases, custom tags,
-            and multiple YAML documents are errors.</li>
-          <li><strong>Does it hold together?</strong> Unique IDs, valid
-            references, renderable fronts, safe package paths, present assets,
-            supported media, and bounded sizes.</li>
-          <li><strong>Will it be a good course?</strong> Non-blocking advice
-            about long sides, weak alternative text, missing attribution,
-            duplicate-looking cards, or front-only prompts that promise an
-            answer.</li>
+          <li><strong>File checks.</strong> The importer checks the YAML
+            structure, field names, data types, and size limits. Duplicate
+            keys, aliases, custom tags, and multiple documents are errors.</li>
+          <li><strong>Course checks.</strong> It checks IDs and references,
+            makes sure card fronts can render, and verifies media paths and
+            files.</li>
+          <li><strong>Quality checks.</strong> It warns about things such as
+            very long cards, missing attribution, weak alternative text, and
+            cards that look like duplicates.</li>
         </ol>
         <div class="callout warning">
           <p><strong>Errors block the whole import.</strong> Warnings may
-            proceed only through preview. The receipt lists defaults,
-            normalizations, warnings, and rejections—never a quietly dropped
-            card or asset.</p>
+            proceed after preview. The import summary lists defaults, changes,
+            warnings, and rejected items. Cards and assets are never dropped
+            without telling you.</p>
         </div>
         <p>Every diagnostic has a stable code, severity, data path, message,
           correction, and documentation link. See the
@@ -398,7 +397,7 @@ cards:
       </section>
 
       <section id="identity">
-        <h2>Stable IDs protect progress</h2>
+        <h2>Keep IDs stable</h2>
         <p><code>courseId</code> identifies the course.
           <code>cardId</code> identifies one review history within it. Treat
           both as permanent opaque keys:</p>
@@ -409,17 +408,17 @@ cards:
           <li>use a new ID when replacing it with a genuinely different review
             prompt; never recycle an old ID for another fact.</li>
         </ul>
-        <p>The public format is an adapter/input contract. Existing compact
-          courses, shipped card IDs, <code>munin/…</code> learner storage keys,
-          cache names, and the installed PWA identity remain compatible behind
-          it. They are not creator-facing field names and must not be renamed.</p>
+        <p>keep club converts this public format to its internal data. Existing
+          courses and card IDs still work, as do the old <code>munin/…</code>
+          storage keys, cache names, and installed app identity. Those names
+          are kept for compatibility.</p>
       </section>
 
       <section id="tooling">
-        <h2>Your editor is not part of the contract</h2>
+        <h2>Use any editor or generator</h2>
         <p>Write YAML by hand, export it from a spreadsheet, generate it from
-          a database, or build your own course studio. keep club owns the
-          boundary—not your workflow.</p>
+          a database, or build your own course editor. The resulting file just
+          needs to follow this format.</p>
         <ul>
           <li>Canonical authoring: one UTF-8 YAML 1.2 document.</li>
           <li>JSON is accepted as YAML-compatible plain data, but YAML is the
@@ -434,14 +433,14 @@ cards:
       </section>
 
       <section id="evolution">
-        <h2>Evolution without surprise</h2>
-        <p><code>schemaVersion</code> is an integer major. Version 2 has an
-          immutable schema URL. Additive clarification may be documented only
-          when it cannot change the meaning of a file already accepted; new
-          fields or changed meaning require a new major.</p>
-        <p>Tools may add unknown data only below namespaced
-          <code>extensions</code>. keep club keeps it inert and never treats an
-          extension as scheduling state or executable content.</p>
+        <h2>Versioning</h2>
+        <p><code>schemaVersion</code> is a whole-number major version. The
+          version 2 schema URL will not change. Clarifications may be added
+          when they do not change how an accepted file is read. New fields or
+          changed meanings require a new major version.</p>
+        <p>Tools may put their own data under namespaced
+          <code>extensions</code>. keep club stores that data but does not run
+          or interpret it.</p>
         <div class="actions">
           <a class="button" href="schema/course-v2.schema.json" download>Download schema v2</a>
           <a class="button secondary" href="reference/errors/">Browse diagnostics</a>
@@ -451,10 +450,10 @@ cards:
       </section>
 
       <footer class="footer">
-        <p>keep club is open source and made by
-          <a href="https://kkonrad.com/" rel="author">kkonrad</a>.
-          Course format 2 is published from the same source and deployment as
-          the app, so the docs and schema cannot quietly become a second product.</p>
+        <p>These docs and the app are published together from the
+          <a href="https://github.com/0xkkonrad/keepclub">keep club source</a>.
+          keep club is made by
+          <a href="https://kkonrad.com/" rel="author">kkonrad</a>.</p>
       </footer>
     </main>
   </div>
