@@ -946,6 +946,9 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 }
 .done-stats div span { font-size: .68rem; color: var(--muted); text-transform: lowercase; }
 .done-card .ghost { width: 100%; margin-top: 10px; }
+.done-moment { margin: 0 0 22px; text-align: left; }
+.done-moment .primary { width: 100%; }
+.done-moment .share-status { text-align: center; }
 
 /* ── browse ──────────────────────────────────────────────────────── */
 
@@ -1119,6 +1122,39 @@ mark {
 }
 .tile span { font-size: .74rem; line-height: 1.5; color: var(--muted); display: block; margin-top: 2px; }
 
+.moment-card {
+  position: relative; overflow: hidden;
+  margin: 22px 0 0; padding: 18px;
+  border: var(--bw) solid var(--stroke); border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  box-shadow: var(--sh-sm);
+}
+.moment-card .moment-art {
+  position: absolute; top: 12px; right: 14px;
+  width: 54px; height: 54px; color: var(--accent); opacity: .82;
+}
+.moment-card .moment-art .dood { width: 100%; height: 100%; }
+.moment-label {
+  margin: 0 70px 5px 0; color: var(--accent); font-size: .65rem;
+  font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+}
+.moment-card h2, .moment-card h3 {
+  margin: 0 68px 7px 0; font-size: 1rem; line-height: 1.35; font-weight: 500;
+}
+.moment-card > p:not(.moment-label):not(.share-status) {
+  margin: 0 58px 14px 0; color: var(--muted); font-size: .76rem; line-height: 1.55;
+}
+.moment-card button { min-height: 40px; }
+.share-status {
+  min-height: 1.2em; margin: 8px 0 0; color: var(--muted);
+  font-size: .68rem; line-height: 1.4;
+}
+.membership-stats {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 13px 0 14px;
+  color: var(--muted); font-size: .7rem;
+}
+.membership-stats b { color: var(--text); font-size: .85rem; font-weight: 500; }
+
 .forecast {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
   align-items: end; height: 108px;
@@ -1168,10 +1204,15 @@ mark {
 .ach li.locked { box-shadow: none; border-style: dashed; opacity: .55; background: none; }
 .ach .dood { width: 30px; height: 30px; color: var(--accent); }
 .ach li.locked .dood { color: var(--muted); }
-.ach .a-txt { min-width: 0; }
+.ach .a-txt { min-width: 0; flex: 1; }
 .ach b { display: block; font-size: .8rem; font-weight: 500; text-transform: lowercase; }
 .ach small { display: block; font-size: .68rem; color: var(--muted); line-height: 1.4; }
 .ach-count { margin: -4px 0 14px; font-size: .76rem; color: var(--muted); }
+.share-mini {
+  flex: none; min-height: var(--tap); padding: 5px 8px;
+  border: 1px solid var(--stroke); border-radius: var(--r-sm);
+  background: transparent; color: var(--text); font-size: .66rem;
+}
 
 /* The unlock card: lands over the bottom of the screen, wiggles once, leaves. */
 /* Top of the screen, not the bottom: an unlock fires mid-session, and at the

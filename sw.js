@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: 'af55a9b66e', courses: { 'day-skipper': '414a4cb020', 'competent-crew': 'cd7c69cb93' } };
+const BUILD = { shell: '62b5548faa', courses: { 'day-skipper': '6eca634293', 'competent-crew': 'a8edcff6e3' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -109,6 +109,9 @@ const SHELL = [
   'app.css',
   'app.js',
   'sync.js',
+  'achievements.js',
+  'share.js',
+  'notifications.js',
   'munin.js',
   'doodles-munin.js',
   // The importer and its parsers. Loaded only when someone brings a deck, and
@@ -307,6 +310,51 @@ self.addEventListener('message', (e) => {
       await say('prefetched');
     })());
   }
+});
+
+/** A notification may outlive the page that created it. Treat its data as
+ * untrusted at click time: only a URL inside this worker's own origin and scope
+ * can ever be opened. */
+function notificationURL(data) {
+  const scope = new URL(self.registration.scope);
+  try {
+    const target = new URL(data && typeof data.url === 'string' ? data.url : './', scope);
+    if (target.origin !== scope.origin
+        || !target.pathname.startsWith(scope.pathname)) return scope.href;
+    return target.href;
+  } catch (e) {
+    return scope.href;
+  }
+}
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const target = notificationURL(e.notification.data);
+    const scope = new URL(self.registration.scope);
+    const windows = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+    // Prefer an exact already-open destination. Otherwise reuse a Keep Club
+    // window instead of multiplying tabs; foreign same-origin paths are not
+    // ours and are deliberately ignored.
+    const exact = windows.find((client) => client.url === target);
+    if (exact) return exact.focus();
+    const app = windows.find((client) => {
+      try {
+        const url = new URL(client.url);
+        return url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
+      } catch (err) {
+        return false;
+      }
+    });
+    if (app) {
+      if (typeof app.navigate === 'function') await app.navigate(target);
+      return app.focus();
+    }
+    return self.clients.openWindow(target);
+  })());
 });
 
 /* A page and the code it names have to come from the same deploy.

@@ -186,6 +186,15 @@
         <p class="done-line" id="done-line"></p>
         <div class="done-stats" id="done-stats"></div>
 
+        <aside class="moment-card done-moment" id="done-moment" hidden>
+          <span class="moment-art" id="done-moment-art" aria-hidden="true"></span>
+          <p class="moment-label" id="done-moment-label"></p>
+          <h3 id="done-moment-title"></h3>
+          <p id="done-moment-copy"></p>
+          <button class="primary" id="done-share">Share this moment</button>
+          <p class="share-status" id="done-share-status" role="status"></p>
+        </aside>
+
         <!-- The reel: clips for the cards you graded Again or Hard. -->
         <div class="reel" id="done-reel" hidden>
           <p class="reel-h" id="reel-h"></p>
@@ -242,6 +251,16 @@
     <main class="body">
       <div class="tiles" id="stat-tiles"></div>
 
+      <section class="moment-card membership-card" id="membership-card" hidden>
+        <span class="moment-art" id="membership-art" aria-hidden="true"></span>
+        <p class="moment-label">your membership</p>
+        <h2>membership pays in memories.</h2>
+        <p id="membership-copy"></p>
+        <div class="membership-stats" id="membership-stats"></div>
+        <button class="ghost" id="membership-share">Share your membership</button>
+        <p class="share-status" id="membership-share-status" role="status"></p>
+      </section>
+
       <h2 class="h-sect">Cards coming back</h2>
       <div class="forecast" id="forecast" role="img" aria-label="Cards due each of the next seven days"></div>
 
@@ -252,6 +271,15 @@
         <span><i class="m-learn"></i> learning</span>
       </p>
       <div id="mastery"></div>
+
+      <section class="moment-card month-card" id="month-card" hidden>
+        <span class="moment-art" id="month-art" aria-hidden="true"></span>
+        <p class="moment-label">monthly recap</p>
+        <h2 id="month-title"></h2>
+        <p id="month-copy"></p>
+        <button class="ghost" id="month-share">Share your month</button>
+        <p class="share-status" id="month-share-status" role="status"></p>
+      </section>
 
       <!-- The generic achievement set is Milestones. A course may call it
            something in its own world (the sailing courses use Ship's log)
@@ -291,6 +319,12 @@
         <h2 class="h-sect">Install</h2>
         <p class="fineprint" id="install-note"></p>
         <button class="ghost wide" id="install-btn" hidden>Install</button>
+      </div>
+
+      <div class="notifications-sect" id="notifications-card" hidden>
+        <h2 class="h-sect">Notifications</h2>
+        <p class="fineprint" id="notifications-note"></p>
+        <button class="ghost wide" id="notifications-btn">Enable milestone notifications</button>
       </div>
 
       <!-- Hidden until app.js has counted this deck's diagrams: how many there
@@ -415,6 +449,9 @@
      compatibility; they are not the public brand. -->
 <script src="sync.js"></script>
 <script src="doodles-munin.js"></script>
+<script src="achievements.js"></script>
+<script src="share.js"></script>
+<script src="notifications.js"></script>
 <script src="munin.js"></script>
 </body>
 </html>

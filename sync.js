@@ -290,9 +290,9 @@ function mergeState(a, b) {
   out.streak = Math.max(streakFrom(days, out.lastDay), 0, ...carried);
 
   const keys = Object.keys(days);
-  if (keys.length > 120) {
+  if (keys.length > 420) {
     keys.sort();
-    for (const key of keys.slice(0, keys.length - 90)) delete days[key];
+    for (const key of keys.slice(0, keys.length - 400)) delete days[key];
   }
   out.days = days;
 
@@ -306,6 +306,9 @@ function mergeState(a, b) {
 
   out.revTotal = Math.max(num(a.revTotal), num(b.revTotal));
   out.revGood = Math.min(out.revTotal, Math.max(num(a.revGood), num(b.revGood)));
+  // A personal best is monotonic just like lifetime answer totals. Keeping the
+  // maximum also makes the merge commutative across three devices.
+  out.bestClean = Math.max(num(a.bestClean), num(b.bestClean));
   const counted = Object.values(days).reduce((total, value) => total + num(value), 0);
   out.answers = Math.max(counted, num(a.answers), num(b.answers));
 

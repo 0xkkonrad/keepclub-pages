@@ -1,7 +1,7 @@
 /* Munin — the review engine, over whichever course the shell has resolved.
  *
- * Everything here is Munin's and the same for every course: the scheduler, the
- * screens, the session, the hoard's rules. What a course brings arrives on the
+ * Everything here is shared by every course: the scheduler, screens, session,
+ * and the adapter into achievements.js. What a course brings arrives on the
  * COURSE global that munin.js sets — its deck, its art maps, its accent, its
  * loading screen, and the names and drawings for the hoard. Nothing in this
  * file may name a course, a subject, or a drawing from one course's set; the
@@ -171,6 +171,7 @@ function freshState() {
     revTotal: 0,
     revGood: 0,
     answers: 0,                  // every grade ever, for the hoard
+    bestClean: 0,                // longest run without Again, across sessions
     ach: {},                     // achievement id -> unlocked timestamp
     // Light by default rather than following the system: the paper, the ink
     // outlines and the hard shadows are the design, and the derived dark set is
@@ -240,13 +241,22 @@ function sanitise(raw) {
   s.recs = recs;
   s.days = isPlainObject(raw.days) ? raw.days : {};
   for (const [k, v] of Object.entries(s.days)) {
-    if (!Number.isFinite(Number(v))) delete s.days[k]; else s.days[k] = Math.round(Number(v));
+    const stamp = /^\d{4}-\d{2}-\d{2}$/.test(k) ? Date.parse(k + 'T00:00:00') : NaN;
+    if (!Number.isFinite(Number(v)) || Number.isNaN(stamp) || dayKey(stamp) !== k) {
+      delete s.days[k];
+    } else {
+      s.days[k] = Math.max(0, Math.round(Number(v)));
+    }
   }
   s.streak = Math.round(num(s.streak, 0, 1e5, 0));
   s.newDone = Math.round(num(s.newDone, 0, 1e6, 0));
   s.revDone = Math.round(num(s.revDone, 0, 1e6, 0));
   s.revTotal = Math.round(num(s.revTotal, 0, 1e9, 0));
   s.revGood = Math.round(num(s.revGood, 0, s.revTotal, 0));
+  // The old build recorded the 20-card clean-run unlock but not the underlying
+  // best. Preserve the minimum fact that unlock proves when upgrading.
+  const legacyClean = isPlainObject(raw.ach) && Number(raw.ach['clean-run']) > 0 ? 20 : 0;
+  s.bestClean = Math.round(num(s.bestClean, 0, 1e9, legacyClean));
 
   // An older save has no lifetime counter. Sum the day history rather than
   // starting at zero, or upgrading resets the hoard for everyone.
@@ -267,7 +277,7 @@ function sanitise(raw) {
   }
   s.ach = ach;
   if (typeof s.day !== 'string') s.day = dayKey(Date.now());
-  if (typeof s.lastDay !== 'string') s.lastDay = null;
+  if (typeof s.lastDay !== 'string' || !s.days[s.lastDay]) s.lastDay = null;
   return s;
 }
 
@@ -519,11 +529,13 @@ function noteAnswered() {
     state.streak = state.lastDay === yesterdayKey() ? state.streak + 1 : 1;
     state.lastDay = t;
   }
-  // 90 days is more history than the stats screen shows; drop the rest
+  // Keep enough calendar evidence for the one-year club milestone. This used
+  // to retain only 90 days, which made a 365-day streak mathematically
+  // unreachable once club streaks were derived across courses.
   const keys = Object.keys(state.days);
-  if (keys.length > 120) {
+  if (keys.length > 420) {
     keys.sort();
-    for (const k of keys.slice(0, keys.length - 90)) delete state.days[k];
+    for (const k of keys.slice(0, keys.length - 400)) delete state.days[k];
   }
 }
 
@@ -1015,91 +1027,107 @@ function wireVideo(rootSel) {
  * "42" rather than falling back to the line it exists to fall back to. */
 const str = (v, fallback) => (typeof v === 'string' && v ? v : fallback);
 
-/* Fourteen things worth noticing. They are all side effects of revising rather
- * than tasks of their own — nothing here asks you to study differently, and
- * none of them can be earned by opening the app and putting it down again.
- *
- * The RULES are Munin's: what counts as a streak is not a matter of subject.
- * The NAMES and the DRAWINGS are the course's, because they are theme — a
- * course names them in its own world through course.json's `hoard.items`, and
- * what is written here is Munin's own, in the raven's vocabulary. That split
- * is not decoration: this list used to be nautical and drawn from Day
- * Skipper's doodle set, so every imported deck showed the same fourteen
- * drawings of a raven under fourteen sailing captions. */
-const HOARD = [
-  { id: 'cast-off', art: 'perch', t: 'first card', d: 'answered your first card', test: (x) => x.answers >= 1 },
-  { id: 'underway', art: 'flap', t: 'fifty', d: '50 cards answered', test: (x) => x.answers >= 50 },
-  { id: 'offshore', art: 'carry', t: 'two hundred and fifty', d: '250 cards answered', test: (x) => x.answers >= 250 },
-  { id: 'blue-water', art: 'hoard', t: 'a thousand', d: '1,000 cards answered', test: (x) => x.answers >= 1000 },
-  { id: 'streak-3', art: 'peek', t: 'three days running', d: 'studied three days in a row', test: (x) => x.streak >= 3 },
-  { id: 'streak-7', art: 'roost', t: 'a week of it', d: 'seven days in a row', test: (x) => x.streak >= 7 },
-  { id: 'streak-14', art: 'strut', t: 'a fortnight', d: 'fourteen days in a row', test: (x) => x.streak >= 14 },
-  { id: 'clean-run', art: 'bow', t: 'clean run', d: '20 in a row without an again', test: (x) => x.clean >= 20 },
-  { id: 'night-watch', art: 'puff', t: 'small hours', d: 'answered a card between midnight and four', test: (x) => x.hour >= 0 && x.hour < 4 },
-  { id: 'dawn-patrol', art: 'quill', t: 'first light', d: 'answered a card before six in the morning', test: (x) => x.hour >= 4 && x.hour < 6 },
-  { id: 'all-sections', art: 'prints', t: 'every corner', d: 'started every section in the deck', test: (x) => x.sections > 0 && x.touched >= x.sections },
-  { id: 'section-swept', art: 'nest', t: 'a section swept', d: 'seen every card in one section', test: (x) => x.swept >= 1 },
-  { id: 'knot-untangled', art: 'worm', t: 'unstuck', d: 'a card that kept slipping is solid again', test: (x) => x.tamed },
-  { id: 'deck-met', art: 'shell', t: 'every card met', d: 'seen every card in the deck at least once', test: (x) => x.deckSeen },
-];
-
-/* A course may rename and redraw any of them, and say nothing about the rest.
- * Only the three theme fields are taken: a course cannot supply a `test`, and
- * an unknown id in course.json names nothing and does nothing. */
-const HOARD_ITEMS = (COURSE.hoard && COURSE.hoard.items) || {};
-const ACHIEVEMENTS = HOARD.map((a) => {
-  const o = HOARD_ITEMS[a.id] || {};
-  return Object.assign({}, a, { t: str(o.t, a.t), d: str(o.d, a.d), art: str(o.art, a.art) });
-});
+/* Rules, scope, copy policy and share priority live in one deterministic
+ * engine. The shell supplies facts and storage; courses may only theme words
+ * and art through the engine's deliberately narrow catalog adapter. */
+const AchievementEngine = globalThis.KeepClubAchievements;
+const ACHIEVEMENTS = AchievementEngine.catalog(COURSE);
 const ACH_IDS = new Set(ACHIEVEMENTS.map((a) => a.id));
-const HOARD_TITLE = str(COURSE.hoard && COURSE.hoard.title, 'Milestones');
+const HOARD_TITLE = AchievementEngine.collectionTitle(COURSE);
+const CLUB_ACH_IDS = new Set(ACHIEVEMENTS
+  .filter((achievement) => achievement.scope === 'club')
+  .map((achievement) => achievement.id));
 
-/** Everything the tests above need, worked out once per answer. 537 cards is
- *  cheap enough to walk; keeping partial counters in state would be one more
- *  thing a restored backup could contradict. */
-function achContext(sess) {
-  const touched = new Set();
-  const seenPer = new Map();
-  let seen = 0, tamed = false;
-  for (const c of DECK.cards) {
-    const r = state.recs[c.cardId];
-    if (!r) continue;
-    seen++;
-    touched.add(c.sectionId);
-    seenPer.set(c.sectionId, (seenPer.get(c.sectionId) || 0) + 1);
-    if (r.lp >= LEECH_AT && r.st === 'r' && r.ivl >= 7) tamed = true;
-  }
-  let swept = 0;
-  for (const s of DECK.sections) {
-    if ((seenPer.get(s.sectionId) || 0) >= s.cardCount) swept++;
-  }
-  return {
-    answers: n(state.answers),
-    streak: n(state.streak),
-    hour: new Date(Date.now()).getHours(),
-    clean: sess ? n(sess.maxClean) : 0,
-    sections: DECK.sections.length,
-    touched: touched.size,
-    swept,
-    tamed,
-    deckSeen: seen >= DECK.cards.length,
-  };
+/** Read one state per course, replacing this course's possibly stale stored
+ * copy with the in-memory document being graded. No storage key is renamed or
+ * copied: the club view is a derived lens over the existing progress blobs. */
+function clubStates() {
+  const out = [];
+  let usedCurrent = false;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!/^munin\/(?:local-[a-z0-9]+|[a-z0-9][a-z0-9-]{0,63})\/state\/v1$/.test(key || '')) continue;
+      if (key === KEY) {
+        out.push(state);
+        usedCurrent = true;
+        continue;
+      }
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        if (isPlainObject(value)) out.push(value);
+      } catch (e) { /* one unreadable old deck contributes nothing */ }
+    }
+  } catch (e) { /* blocked storage contributes nothing */ }
+  if (!usedCurrent && state) out.push(state);
+  return out;
+}
+
+function clubFacts() {
+  return AchievementEngine.aggregateClubStates(clubStates());
+}
+
+function achievementContext(sess, at = Date.now()) {
+  const club = clubFacts();
+  const course = AchievementEngine.contextFromDeck({
+    at,
+    state,
+    deck: DECK,
+    course: COURSE,
+    session: sess,
+    clubStreak: club.clubStreak,
+    personalBest: Math.max(club.personalBest, n(sess && sess.maxClean)),
+    previousLastDay: sess && sess.previousClubLastDay,
+  });
+  return Object.assign({}, course, {
+    clubAnswers: club.answers,
+    clubSolid: club.solidCards,
+    clubStreak: club.clubStreak,
+    repeatAnswers: club.repeatAnswers,
+    repeatGood: club.repeatGood,
+    repeatAccuracy: club.repeatAnswers
+      ? Math.round((club.repeatGood / club.repeatAnswers) * 100) : 0,
+  });
 }
 
 function checkAchievements(sess) {
   if (!DECK) return [];
-  const ctx = achContext(sess);
   const now = Date.now();
-  const fresh = [];
-  for (const a of ACHIEVEMENTS) {
-    if (state.ach[a.id]) continue;
-    let hit = false;
-    try { hit = !!a.test(ctx); } catch (e) { hit = false; }
-    if (hit) { state.ach[a.id] = now; fresh.push(a); }
+  const club = clubFacts();
+  const unlocked = Object.assign({}, state.ach);
+  for (const id of CLUB_ACH_IDS) {
+    if (club.unlocked[id] && (!unlocked[id] || club.unlocked[id] < unlocked[id])) {
+      unlocked[id] = club.unlocked[id];
+    }
   }
+  const result = AchievementEngine.evaluate({
+    at: now,
+    context: achievementContext(sess, now),
+    unlocked,
+    course: COURSE,
+  });
+  const fresh = result.newlyUnlocked;
   if (fresh.length) {
+    for (const achievement of fresh) state.ach[achievement.id] = achievement.at;
+    if (sess) {
+      sess.newAchievements = sess.newAchievements || [];
+      for (const achievement of fresh) {
+        if (!sess.newAchievements.some((item) => item.id === achievement.id)) {
+          sess.newAchievements.push(achievement);
+        }
+      }
+    }
     save();
     queueUnlocks(fresh);
+    for (const achievement of fresh) {
+      const delivery = globalThis.KeepNotifications?.notifyAchievement?.({
+        id: achievement.id,
+        title: achievement.title,
+        body: achievement.description,
+        url: './',
+      });
+      if (delivery && typeof delivery.catch === 'function') delivery.catch(() => {});
+    }
     if (current === 'stats') renderAch();
   }
   return fresh;
@@ -1109,6 +1137,7 @@ function checkAchievements(sess) {
  * same answer — used to draw the second one straight over the first. */
 let unlockQueue = [];
 let unlockTimer = null;
+let currentUnlockId = null;
 
 function queueUnlocks(list) {
   unlockQueue.push(...list);
@@ -1120,6 +1149,7 @@ function queueUnlocks(list) {
  * cannot be taken out of the tree instead — a region that is display:none at
  * the moment its text changes is announced unreliably (see .toast.away). */
 function stowUnlock() {
+  currentUnlockId = null;
   $('#unlock').classList.add('away');
   $('#unlock-key').textContent = '';
   $('#unlock-title').textContent = '';
@@ -1130,10 +1160,11 @@ function showNextUnlock() {
   const el = $('#unlock');
   const a = unlockQueue.shift();
   if (!a) { unlockTimer = null; stowUnlock(); return; }
+  currentUnlockId = a.id;
   $('#unlock-art').innerHTML = doodle(a.art);
   $('#unlock-key').textContent = 'unlocked';
-  $('#unlock-title').textContent = a.t;
-  $('#unlock-sub').textContent = a.d;
+  $('#unlock-title').textContent = a.title;
+  $('#unlock-sub').textContent = a.description;
   el.classList.remove('away');
   // Same element, second unlock: the entry animation only replays after a reflow.
   el.style.animation = 'none';
@@ -1152,19 +1183,173 @@ function dismissUnlock() {
   if (unlockQueue.length) unlockTimer = setTimeout(showNextUnlock, 220);
 }
 
+function retractUnlocks(ids) {
+  const removed = new Set(ids);
+  if (!removed.size) return;
+  unlockQueue = unlockQueue.filter((achievement) => !removed.has(achievement.id));
+  if (!removed.has(currentUnlockId)) return;
+  clearTimeout(unlockTimer);
+  unlockTimer = null;
+  stowUnlock();
+  if (unlockQueue.length) unlockTimer = setTimeout(showNextUnlock, 220);
+}
+
+let lastDoneMoment = null;
+let membershipMoment = null;
+let monthlyMoment = null;
+let progressMoments = new Map();
+
+function visibleUnlocks() {
+  const unlocked = Object.assign({}, state.ach);
+  const club = clubFacts();
+  for (const id of CLUB_ACH_IDS) {
+    if (club.unlocked[id] && (!unlocked[id] || club.unlocked[id] < unlocked[id])) {
+      unlocked[id] = club.unlocked[id];
+    }
+  }
+  return unlocked;
+}
+
+function shareStat(moment) {
+  const p = moment.payload || {};
+  switch (moment.family) {
+    case 'club-streak':
+      return { stat: `${n(p.target || p.value)} days`, label: 'in a row at the club' };
+    case 'memories-kept':
+      return moment.id.startsWith('solid-pct-')
+        ? { stat: `${n(p.target || p.value)}%`, label: 'of this deck kept solid' }
+        : { stat: String(n(p.target || p.value)), label: 'memories kept solid' };
+    case 'personal-best':
+      return { stat: String(n(p.value || p.target)), label: 'remembered without an again' };
+    case 'activity':
+      return { stat: String(n(p.target || p.value)), label: 'answers at the club' };
+    case 'anki-keeper':
+      return { stat: String(n(p.target || p.value)), label: 'imported reviews kept local' };
+    case 'monthly-recap':
+      return { stat: String(n(p.studyDays)), label: `study days in ${moment.label || 'the month'}` };
+    case 'membership':
+      return p.clubStreak
+        ? { stat: `${n(p.clubStreak)} days`, label: 'current club streak' }
+        : { stat: String(n(p.solidCards)), label: 'memories kept solid' };
+    case 'mastery':
+      return { stat: '100%', label: moment.id === 'deck-kept' ? 'of this deck kept' : 'section kept' };
+    case 'club-life':
+      if (moment.id === 'steady-hand') {
+        return { stat: '90%+', label: 'recall over at least 100 repeat cards' };
+      }
+      return {};
+    default:
+      return {};
+  }
+}
+
+function shareModel(moment) {
+  const stat = shareStat(moment);
+  const imported = /^local-[a-z0-9]+$/.test(COURSE.id);
+  const artName = str(moment.art, 'tower');
+  return {
+    label: ({
+      'club-streak': 'club streak',
+      'memories-kept': 'memories kept',
+      'monthly-recap': 'monthly recap',
+      'personal-best': 'personal best',
+      mastery: 'course milestone',
+      membership: 'club membership',
+    })[moment.family] || 'member achievement',
+    title: moment.title,
+    body: moment.description,
+    stat: stat.stat,
+    statLabel: stat.label,
+    accent: COURSE.accent && COURSE.accent.light,
+    tower: { path: pathOf(MUNIN_DOODLE, 'tower'), viewBox: '0 0 32 32' },
+    // Club totals are not owned by whichever course happened to be open when
+    // Share was tapped. Only a course-scoped moment earns a course deep link.
+    course: imported || moment.scope !== 'course' ? null : {
+      kind: 'built-in',
+      id: COURSE.id,
+      title: COURSE.title,
+      accent: COURSE.accent && COURSE.accent.light,
+      art: {
+        path: pathOf(DOODLE, artName) || pathOf(MUNIN_DOODLE, artName),
+        viewBox: '0 0 32 32',
+      },
+    },
+  };
+}
+
+async function shareMoment(moment, button, status) {
+  if (!moment || !moment.shareable || !globalThis.KeepShare) return;
+  const old = button && button.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Making card…';
+  }
+  if (status) status.textContent = '';
+  try {
+    const result = await KeepShare.share(shareModel(moment), { baseUrl: location.href });
+    const line = result.status === 'shared' ? 'Shared.'
+      : result.status === 'copied' ? 'Copied — ready to paste.'
+        : result.status === 'downloaded' ? 'Card downloaded.'
+          : result.status === 'cancelled' ? ''
+            : 'Sharing is not available in this browser.';
+    if (status) status.textContent = line;
+    else if (line) toast(line);
+  } catch (e) {
+    if (status) status.textContent = 'Could not make the share card. Try again.';
+    else toast('Could not make the share card. Try again.', true);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = old;
+    }
+  }
+}
+
 function renderAch() {
   const h = $('#hoard-title');
   if (h) h.textContent = HOARD_TITLE;
-  const got = ACHIEVEMENTS.filter((a) => state.ach[a.id]).length;
+  const unlocked = visibleUnlocks();
+  const at = Date.now();
+  const context = achievementContext(null, at);
+  const keptSections = (context.keptSectionKeys || []).map((key) => {
+    const section = sectionOf.get(key);
+    return { key, title: section && section.title, art: SECTION_ART[key] || COURSE.fallback };
+  });
+  const sectionMoments = AchievementEngine.sessionMoments({
+    at,
+    course: COURSE,
+    context: Object.assign({}, context, { newlyKeptSections: keptSections }),
+  }).filter((moment) => moment.id.startsWith('section-kept:'));
+  const personalBest = AchievementEngine.buildPersonalBestMoment({
+    at,
+    bestClean: context.personalBest,
+    course: COURSE,
+  });
+  progressMoments = new Map(sectionMoments
+    .concat(personalBest ? [personalBest] : [])
+    .map((moment) => [moment.id, moment]));
+  const got = ACHIEVEMENTS.filter((a) => unlocked[a.id]).length;
   $('#ach-count').textContent = got
     ? `${got} of ${ACHIEVEMENTS.length} earned. They unlock as you revise — there is nothing to collect deliberately.`
     : `Nothing in the log yet. ${ACHIEVEMENTS.length} of them turn up as you revise.`;
-  $('#ach-list').innerHTML = ACHIEVEMENTS.map((a) => {
-    const on = state.ach[a.id];
+  const staticRows = ACHIEVEMENTS.map((a) => {
+    const on = unlocked[a.id];
     const when = on ? ` · ${longDate(dayKey(on))}` : '';
     return `<li class="${on ? '' : 'locked'}">${doodle(a.art)}
-      <span class="a-txt"><b>${escapeHtml(a.t)}</b><small>${escapeHtml(a.d)}${escapeHtml(when)}</small></span></li>`;
+      <span class="a-txt"><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.description)}${escapeHtml(when)}</small></span>
+      ${on && a.shareable
+        ? `<button class="share-mini" data-share-ach="${escapeHtml(a.id)}" aria-label="Share ${escapeHtml(a.title)}">Share</button>`
+        : ''}</li>`;
   }).join('');
+  const repeatableRows = [...progressMoments.values()].map((moment) => `
+    <li class="repeatable">${doodle(moment.art)}
+      <span class="a-txt"><b>${escapeHtml(moment.title)}</b>
+        <small>${escapeHtml(moment.description)} · ${moment.family === 'personal-best'
+          ? 'current best' : 'currently solid'}</small></span>
+      <button class="share-mini" data-share-moment="${escapeHtml(moment.id)}"
+        aria-label="Share ${escapeHtml(moment.title)}">Share</button>
+    </li>`).join('');
+  $('#ach-list').innerHTML = staticRows + repeatableRows;
 }
 
 /* A drawing for each of the 24 chapters. Picked for the thing the chapter is
@@ -1305,6 +1490,10 @@ function buildSession(sectionKey, opts) {
     reel: [],                   // clips for the cards graded Again or Hard
     reelCards: [],              // card ids, retained until a late clip map lands
     ahead: !!opts.ahead,
+    clean: 0,
+    maxClean: 0,
+    sectionKeys: [],
+    newAchievements: [],
   };
 }
 
@@ -1335,6 +1524,7 @@ function persistStudySession() {
     reel: Array.isArray(session.reel) ? session.reel.slice() : [],
     reelCards: Array.isArray(session.reelCards) ? session.reelCards.slice() : [],
     ahead: !!session.ahead,
+    sectionKeys: Array.isArray(session.sectionKeys) ? session.sectionKeys.slice() : [],
   };
   try {
     sessionStorage.setItem(ACTIVE_STUDY_KEY, JSON.stringify({
@@ -1400,6 +1590,12 @@ function resumableStudySession() {
     reel: strings(raw.reel),
     reelCards: ids(raw.reelCards),
     ahead: !!raw.ahead,
+    sectionKeys: Array.isArray(raw.sectionKeys)
+      ? [...new Set(raw.sectionKeys.filter((key) => sectionOf.has(key)))]
+      : [],
+    // Unlock records shown pre-refresh are already in state.ach; the finish
+    // screen simply cannot replay them as this session's hero after a reload.
+    newAchievements: [],
   };
 }
 
@@ -1412,6 +1608,20 @@ function restoreStudySession() {
   }
   const wasRevealed = restored.revealed;
   session = restored;
+  // The pre-refresh club snapshot is gone with the old page. Re-baseline from
+  // the current blobs: answers already recorded before the reload now count as
+  // "before this session", so a moment can only be missed, never invented.
+  const resumedClub = clubFacts();
+  const resumedContext = AchievementEngine.contextFromDeck({
+    at: Date.now(),
+    state,
+    deck: DECK,
+    course: COURSE,
+    session,
+  });
+  session.initialBestClean = resumedClub.personalBest;
+  session.previousClubLastDay = resumedClub.lastDay;
+  session.initialKeptSections = resumedContext.keptSectionKeys.slice();
   undoStack = [];
   settleDock(false);
   go('study');
@@ -1767,6 +1977,17 @@ function startSession(sectionKey, opts) {
     toast(sectionKey ? 'Nothing to study in that section yet.' : 'Nothing to study right now.');
     return;
   }
+  const startingClub = clubFacts();
+  const startingContext = AchievementEngine.contextFromDeck({
+    at: Date.now(),
+    state,
+    deck: DECK,
+    course: COURSE,
+    session,
+  });
+  session.initialBestClean = startingClub.personalBest;
+  session.previousClubLastDay = startingClub.lastDay;
+  session.initialKeptSections = startingContext.keptSectionKeys.slice();
   // Two different things get called extra here, and only one of them counts:
   // unseen cards are the deck being introduced early, cards pulled forward from
   // a later day are practice. Said before the first question rather than found
@@ -2035,7 +2256,8 @@ function answer(g) {
     st: {
       newDone: state.newDone, revDone: state.revDone,
       revTotal: state.revTotal, revGood: state.revGood,
-      answers: state.answers, streak: state.streak, lastDay: state.lastDay,
+      answers: state.answers, bestClean: state.bestClean,
+      streak: state.streak, lastDay: state.lastDay,
       // Copies, not references: noteAnswered() writes into both, and the day
       // history is pruned in place once it is long enough.
       days: Object.assign({}, state.days),
@@ -2045,6 +2267,8 @@ function answer(g) {
     s: {
       done: session.done, again: session.again, good: session.good,
       clean: session.clean, maxClean: session.maxClean,
+      sectionKeys: session.sectionKeys.slice(),
+      newAchievements: session.newAchievements.slice(),
       missed: session.missed.slice(),
       reel: session.reel.slice(),
       reelCards: session.reelCards.slice(),
@@ -2068,6 +2292,11 @@ function answer(g) {
     session.good++;
     session.clean = n(session.clean) + 1;
     session.maxClean = Math.max(n(session.maxClean), session.clean);
+    if (!session.ahead) state.bestClean = Math.max(n(state.bestClean), session.maxClean);
+  }
+  const answeredCard = byId.get(id);
+  if (answeredCard && !session.sectionKeys.includes(answeredCard.sectionId)) {
+    session.sectionKeys.push(answeredCard.sectionId);
   }
 
   session.queue.shift();
@@ -2092,13 +2321,31 @@ function answer(g) {
 function undo() {
   const u = undoStack.pop();
   if (!u) return;
+  const retracted = Object.keys(state.ach)
+    .filter((id) => !Object.prototype.hasOwnProperty.call(u.st.ach, id));
   if (u.rec) state.recs[u.id] = u.rec; else delete state.recs[u.id];
   Object.assign(state, u.st);
   session.queue = u.queue;
   Object.assign(session, u.s);
+  retractUnlocks(retracted);
   save();
   showCard();
   toast('Undone');
+}
+
+function renderDoneMoment(moment) {
+  lastDoneMoment = moment && moment.shareable ? moment : null;
+  const card = $('#done-moment');
+  card.hidden = !lastDoneMoment;
+  $('#done-share-status').textContent = '';
+  if (!lastDoneMoment) return;
+  $('#done-moment-art').innerHTML = doodle(lastDoneMoment.art || 'tower');
+  $('#done-moment-label').textContent = lastDoneMoment.family === 'club-streak'
+    ? 'club streak' : lastDoneMoment.family === 'memories-kept'
+      ? 'memories kept' : lastDoneMoment.family === 'personal-best'
+        ? 'personal best' : 'worth sharing';
+  $('#done-moment-title').textContent = lastDoneMoment.title;
+  $('#done-moment-copy').textContent = lastDoneMoment.description;
 }
 
 function finish() {
@@ -2108,7 +2355,7 @@ function finish() {
     <div><b>${session.done}</b><span>cards</span></div>
     <div><b>${acc}%</b><span>first try</span></div>
     <div><b>${session.startedNew}</b><span>new</span></div>
-    <div><b>${n(state.streak)}</b><span>day streak</span></div>`;
+    <div><b>${clubFacts().clubStreak}</b><span>club streak</span></div>`;
 
   const c = counts(null);
   const revRoom = Math.max(0, state.settings.maxRev - state.revDone);
@@ -2138,7 +2385,40 @@ function finish() {
 
   lastReelCards = session.reelCards.slice();
   renderReel(session.reel.slice(0, 5));
-  if (!session.ahead) checkAchievements(session);
+  let hero = null;
+  if (!session.ahead) {
+    checkAchievements(session);
+    const at = Date.now();
+    const context = achievementContext(session, at);
+    const before = new Set(session.initialKeptSections || []);
+    const newlyKeptSections = (context.keptSectionKeys || [])
+      .filter((key) => !before.has(key))
+      .map((key) => {
+        const section = sectionOf.get(key);
+        return {
+          key,
+          title: section && section.title,
+          art: SECTION_ART[key] || COURSE.fallback,
+        };
+      });
+    const repeatable = AchievementEngine.sessionMoments({
+      at,
+      course: COURSE,
+      // `context` is already normalised, so it carries previousPersonalBest: 0;
+      // only the canonical key can override it — the previousBestClean alias
+      // loses the `??` race against that stamped zero.
+      context: Object.assign({}, context, {
+        previousPersonalBest: session.initialBestClean,
+        newlyKeptSections,
+      }),
+    });
+    const hasExactSection = repeatable.some((moment) => moment.id.startsWith('section-kept:'));
+    const candidates = (session.newAchievements || [])
+      .filter((moment) => !(hasExactSection && moment.id === 'section-kept'))
+      .concat(repeatable);
+    hero = AchievementEngine.bestMoment(candidates);
+  }
+  renderDoneMoment(hero);
   // The lease is the hand-off boundary between whole-document writers. Commit
   // the final answer before another tab is allowed to start from storage.
   flushAndReleaseStudyLock();
@@ -2873,15 +3153,78 @@ function renderSyncState() {
     + '<button class="ghost" data-sync="off">Turn off sync</button>';
 }
 
+function renderClubMoments() {
+  const now = Date.now();
+  const club = clubFacts();
+  membershipMoment = AchievementEngine.buildMembershipMoment({
+    at: now,
+    answers: club.answers,
+    solidCards: club.solidCards,
+    clubStreak: club.clubStreak,
+    courseCount: club.courseCount,
+  });
+  const membership = $('#membership-card');
+  membership.hidden = !membershipMoment.eligible;
+  if (membershipMoment.eligible) {
+    $('#membership-art').innerHTML = doodle('tower');
+    $('#membership-copy').textContent = membershipMoment.description;
+    $('#membership-stats').innerHTML = `
+      <span><b>${club.clubStreak}</b> day streak</span>
+      <span><b>${club.solidCards}</b> solid</span>
+      <span><b>${club.answers}</b> answers</span>`;
+  }
+
+  monthlyMoment = AchievementEngine.buildMonthlyRecap({
+    at: now,
+    days: club.days,
+    solidCards: club.solidCards,
+    courseCount: club.courseCount,
+    clubStreak: club.clubStreak,
+  });
+  const month = $('#month-card');
+  month.hidden = !monthlyMoment.eligible;
+  if (monthlyMoment.eligible) {
+    $('#month-title').textContent = monthlyMoment.title;
+    $('#month-copy').textContent = monthlyMoment.description;
+    $('#month-art').innerHTML = doodle('tower');
+  }
+}
+
+function renderNotifications() {
+  const card = $('#notifications-card');
+  if (!globalThis.KeepNotifications) {
+    card.hidden = true;
+    return;
+  }
+  const status = KeepNotifications.status();
+  card.hidden = !status.supported;
+  if (!status.supported) return;
+  const button = $('#notifications-btn');
+  const note = $('#notifications-note');
+  button.disabled = false;
+  if (status.permission === 'denied') {
+    note.textContent = 'Notifications are blocked for this site. You can allow them in your browser settings.';
+    button.textContent = 'Notifications blocked';
+    button.disabled = true;
+  } else if (status.enabled) {
+    note.textContent = 'Milestones can appear when keep club is in the background. Scheduled reminders need a push service and are not available yet.';
+    button.textContent = 'Turn off milestone notifications';
+  } else {
+    note.textContent = 'Allow milestone notifications when keep club is in the background. Scheduled reminders need a push service and are not available yet.';
+    button.textContent = 'Enable milestone notifications';
+  }
+}
+
 function renderStats() {
   rollDay();
+  const club = clubFacts();
   const buckets = { new: 0, learning: 0, young: 0, mature: 0 };
   for (const c of DECK.cards) buckets[stateOf(c.cardId)]++;
   const acc = state.revTotal ? Math.round((state.revGood / state.revTotal) * 100) : null;
 
   $('#stats-sub').textContent = `${countStudiedToday()} answers today`;
   $('#stat-tiles').innerHTML = `
-    <div class="tile"><b>${n(state.streak)}</b><span>day streak</span></div>
+    <div class="tile"><b>${club.clubStreak}</b><span>club streak <small>— across every course</small></span></div>
     <div class="tile"><b>${buckets.mature}</b><span>solid <small>— still there in three weeks</small></span></div>
     <div class="tile"><b>${buckets.young + buckets.learning}</b><span>seen, not solid yet</span></div>
     <div class="tile"><b>${buckets.new}</b><span>not started</span></div>
@@ -2958,12 +3301,14 @@ function renderStats() {
     ? `Raised to ${auto} a day to get through the deck before your exam.`
     : '';
   $('#build-line').textContent = `Deck build ${DECK.buildFingerprint || 'unknown'} · ${DECK.cards.length} cards`;
+  renderClubMoments();
   renderAch();
   // Re-asked on every visit rather than once at boot: on a first load the
   // registration is still being made when the app finishes starting, and the
   // answer this card gives depends on it.
   renderOffline();
   renderInstall();
+  renderNotifications();
   renderBackupState();
   renderSyncState();
 }
@@ -3381,6 +3726,36 @@ function wire() {
   $('#unlock').addEventListener('click', dismissUnlock);
   $('#done-home').addEventListener('click', () => leaveStudy(false));
   $('#done-more').addEventListener('click', () => startSession(null, {}));
+  $('#done-share').addEventListener('click', (e) =>
+    shareMoment(lastDoneMoment, e.currentTarget, $('#done-share-status')));
+  $('#membership-share').addEventListener('click', (e) =>
+    shareMoment(membershipMoment, e.currentTarget, $('#membership-share-status')));
+  $('#month-share').addEventListener('click', (e) =>
+    shareMoment(monthlyMoment, e.currentTarget, $('#month-share-status')));
+  $('#ach-list').addEventListener('click', (e) => {
+    const repeatable = e.target.closest('[data-share-moment]');
+    if (repeatable) {
+      shareMoment(progressMoments.get(repeatable.dataset.shareMoment), repeatable);
+      return;
+    }
+    const button = e.target.closest('[data-share-ach]');
+    if (!button) return;
+    const unlocked = visibleUnlocks();
+    const id = button.dataset.shareAch;
+    const moment = AchievementEngine.record({
+      id,
+      at: unlocked[id],
+      context: achievementContext(null),
+      course: COURSE,
+    });
+    shareMoment(moment, button);
+  });
+  $('#notifications-btn').addEventListener('click', async () => {
+    const status = KeepNotifications.status();
+    if (status.enabled) KeepNotifications.disable();
+    else await KeepNotifications.enable();
+    renderNotifications();
+  });
 
   $('#theme-btn').addEventListener('click', () => {
     MuninTheme.cycle();

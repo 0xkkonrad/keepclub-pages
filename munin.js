@@ -1872,12 +1872,15 @@ async function importLegacyPayload(payload) {
       taken.add(id);
       remap[oldId] = id;
 
+      // The retired mirror ships media as {i, name, kind} with kinds 'img' and
+      // 'snd'; store.put() keys on storageIndex and reads source/mediaType, so
+      // the wire shape has to be translated here — the sender is frozen.
       const media = (Array.isArray(bundle.media) ? bundle.media : [])
         .filter((item) => Number.isInteger(Number(item.i)) && item.bytes)
         .map((item) => ({
-          i: Number(item.i),
-          name: String(item.name || ''),
-          kind: String(item.kind || ''),
+          storageIndex: Number(item.i),
+          source: String(item.name || ''),
+          mediaType: item.kind === 'snd' || item.kind === 'audio' ? 'audio' : 'image',
           bytes: item.bytes instanceof Uint8Array
             ? item.bytes
             : new Uint8Array(item.bytes),
