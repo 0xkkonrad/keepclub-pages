@@ -207,9 +207,10 @@ cards:
             </tbody>
           </table>
         </div>
-        <p>keep club sanitizes rendered Markdown before storing it. Unsafe
-          links keep their labels but are not clickable. Inline HTML appears
-          as text.</p>
+        <p>keep club validates Markdown at import and renders it safely each
+          time a card is shown; the plain CommonMark is what it keeps. A link
+          that is not HTTPS or mailto is an error and blocks the import.
+          Inline HTML appears as text.</p>
       </section>
 
       <section id="organization">
@@ -289,10 +290,11 @@ cards:
             cards that look like duplicates.</li>
         </ol>
         <div class="callout warning">
-          <p><strong>Errors block the whole import.</strong> Warnings may
-            proceed after preview. The import summary lists defaults, changes,
-            warnings, and rejected items. Cards and assets are never dropped
-            without telling you.</p>
+          <p><strong>Errors block the whole import.</strong> Nothing is saved
+            from a course with errors; it either all lands or all fails.
+            Warnings may proceed after preview, and the import summary lists
+            what landed along with every warning worth checking. Cards and
+            assets are never silently dropped.</p>
         </div>
         <p>Every diagnostic has a stable code, severity, data path, message,
           correction, and documentation link. See the
@@ -310,7 +312,7 @@ cards:
               <tr><td><code>courseId</code></td><td>Yes</td><td>Stable creator-owned identity.</td></tr>
               <tr><td><code>cards</code></td><td>Yes</td><td>One to 50,000 card records, in presentation order.</td></tr>
               <tr><td><code>title</code>, <code>shortTitle</code>, <code>tagline</code>, <code>description</code></td><td>No</td><td>Human-facing course copy.</td></tr>
-              <tr><td><code>contentLanguage</code>, <code>instructionLanguage</code></td><td>No</td><td>BCP 47-style language tags; never guessed.</td></tr>
+              <tr><td><code>contentLanguage</code>, <code>instructionLanguage</code></td><td>No</td><td>BCP 47-style language tags, never guessed from the device. <code>instructionLanguage</code> defaults to <code>contentLanguage</code> when omitted.</td></tr>
               <tr><td><code>authors</code>, <code>license</code>, <code>source</code></td><td>No</td><td>Attribution and provenance. A license is required to publish through keep club.</td></tr>
               <tr><td><code>sections</code>, <code>groups</code></td><td>No</td><td>Optional navigation hierarchy.</td></tr>
               <tr><td><code>theme</code></td><td>No</td><td>Safe colors, packaged raster art, loading copy, and an app-owned animation.</td></tr>
@@ -353,7 +355,8 @@ cards:
             <tbody>
               <tr><td><code>side</code>, <code>mediaType</code>, <code>source</code></td><td>Yes</td><td>Front/back, image/audio/video, and local package path.</td></tr>
               <tr><td><code>mediaId</code>, <code>mimeType</code></td><td>No</td><td>Stable media identity and an assertion checked against bytes.</td></tr>
-              <tr><td><code>alternativeText</code>, <code>decorative</code>, <code>width</code>, <code>height</code></td><td>No</td><td>Image accessibility and dimensions.</td></tr>
+              <tr><td><code>alternativeText</code>, <code>decorative</code></td><td>No</td><td>Image-only accessibility fields.</td></tr>
+              <tr><td><code>width</code>, <code>height</code></td><td>No</td><td>Pixel dimensions for image or video media.</td></tr>
               <tr><td><code>caption</code>, <code>transcript</code>, <code>captionTracks</code></td><td>No</td><td>Readable and timed text alternatives.</td></tr>
               <tr><td><code>posterImage</code>, <code>durationSeconds</code>, <code>credit</code></td><td>No</td><td>Playback presentation and attribution.</td></tr>
             </tbody>

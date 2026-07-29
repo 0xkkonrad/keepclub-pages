@@ -57,7 +57,7 @@
         <dl class="diagnostics">
           <div id="document-invalid-yaml">
             <dt><code>document.invalid_yaml</code></dt>
-            <dd>The document could not be parsed as YAML 1.2. Fix the syntax at the reported location.</dd>
+            <dd>The document could not be parsed as YAML 1.2, or the selected file or its <code>.keep</code> archive could not be read at all. Fix the syntax at the reported location, or rebuild the archive.</dd>
           </div>
           <div id="document-unsupported-file-type">
             <dt><code>document.unsupported_file_type</code></dt>
@@ -85,7 +85,7 @@
           </div>
           <div id="document-non-plain-value">
             <dt><code>document.non_plain_value</code></dt>
-            <dd>A mapping key or number cannot be stored safely as course data. Use string keys and finite, safe numbers.</dd>
+            <dd>A mapping key, number, or other scalar value cannot be stored safely as course data. Use string keys and plain string, number, boolean, or null values.</dd>
           </div>
           <div id="document-too-many-errors">
             <dt><code>document.too_many_errors</code></dt>
@@ -133,7 +133,7 @@
           </div>
           <div id="markdown-empty">
             <dt><code>markdown.empty</code></dt>
-            <dd>A required Markdown field has no visible content. Add content, or omit the field if it is optional.</dd>
+            <dd>A required Markdown field has no visible content. Add content, or omit the field if it is optional. Reserved: the standard import path does not currently emit this code.</dd>
           </div>
           <div id="markdown-too-many-errors">
             <dt><code>markdown.too_many_errors</code></dt>
@@ -157,7 +157,7 @@
           </div>
           <div id="course-cards-required">
             <dt><code>course.cards_required</code></dt>
-            <dd><code>cards</code> is missing, empty, or not a list. Add at least one card.</dd>
+            <dd><code>cards</code> is missing, empty, not a list, or has more than 50,000 entries. Add at least one card, or split a course above the limit.</dd>
           </div>
           <div id="card-missing-id">
             <dt><code>card.missing_id</code></dt>
@@ -169,11 +169,11 @@
           </div>
           <div id="field-invalid-type">
             <dt><code>field.invalid_type</code></dt>
-            <dd>A value has the wrong data type. Use the type listed in the field reference.</dd>
+            <dd>A value has the wrong data type, or a list or object exceeds its documented size limit. Use the type listed in the field reference and stay within the limits.</dd>
           </div>
           <div id="field-empty">
             <dt><code>field.empty</code></dt>
-            <dd>An optional value is present but empty. Add meaningful content or remove the field.</dd>
+            <dd>A value is missing or blank where non-blank content is required. Add meaningful content, or remove the field if it is optional.</dd>
           </div>
           <div id="extension-invalid-namespace">
             <dt><code>extension.invalid_namespace</code></dt>
@@ -231,7 +231,7 @@
           </div>
           <div id="media-missing">
             <dt><code>media.missing</code></dt>
-            <dd>A declared asset is not in the package. Add it or remove the reference.</dd>
+            <dd>A declared asset is not in the package, or could not be safely read from it. Add or replace the file, or remove the reference.</dd>
           </div>
           <div id="media-type-mismatch">
             <dt><code>media.type_mismatch</code></dt>
@@ -243,7 +243,7 @@
           </div>
           <div id="media-too-many">
             <dt><code>media.too_many</code></dt>
-            <dd>A card or course has more media than the documented limit. Split it or remove some media.</dd>
+            <dd>A card, course, or single media item (for example its caption tracks) has more attached media than the documented limit. Split it or remove some media.</dd>
           </div>
           <div id="media-too-large">
             <dt><code>media.too_large</code></dt>
@@ -267,7 +267,7 @@
           </div>
           <div id="package-too-large">
             <dt><code>package.too_large</code></dt>
-            <dd>The archive is too large when compressed or expanded. Reduce its size.</dd>
+            <dd>The archive is too large when compressed or expanded, or a member declares an impossible size. Reduce its size or rebuild it with a standard ZIP tool.</dd>
           </div>
           <div id="package-expansion-ratio">
             <dt><code>package.expansion_ratio</code></dt>
