@@ -7,8 +7,8 @@
  * file may name a course, a subject, or a drawing from one course's set; the
  * separation gate in tests/ fails the build if it does.
  *
- * No dependencies, no network after first load. Review history lives in
- * localStorage under one key, so it survives reloads but never leaves the device.
+ * No dependencies after the first load. Review history lives in localStorage
+ * under one key; built-in courses may also copy it through opt-in Sync.
  *
  * Scheduling is SM-2 with the awkward parts removed: two learning steps, four
  * grades, ease clamped to a sane band, and a session-local relearn queue so a
@@ -195,6 +195,10 @@ function sanitise(raw) {
   };
   s.settings.newPerDay = Math.round(num(s.settings.newPerDay, 0, 200, 20));
   s.settings.maxRev = Math.round(num(s.settings.maxRev, 10, 999, 120));
+  // A corrupt backup or old experimental build must not pin the settings
+  // winner with Infinity, a string, or a timestamp outside JavaScript's date
+  // range. Zero means the block predates timestamped settings sync.
+  s.settings.at = Math.round(num(s.settings.at, 0, 8.64e15, 0));
   s.settings.shuffle = !!s.settings.shuffle;
   s.settings.examSkipped = !!s.settings.examSkipped;
   // The default exam date belongs to a fresh install only. A restored backup
@@ -266,6 +270,10 @@ function load() {
     console.warn('progress unreadable, starting fresh', e);
   }
   state = sanitise(s);
+  // Establish the baseline before the first settings edit. Leaving this null
+  // meant the first change after a cold open was not timestamped, so another
+  // device's older settings could win the next sync.
+  settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
   rollDay();
 }
 
@@ -435,6 +443,8 @@ addEventListener('storage', (e) => {
   }
   state = sanitise(incoming);
   for (const id of Object.keys(state.recs)) if (!byId.has(id)) delete state.recs[id];
+  // This was another tab's write, not a fresh local settings decision.
+  settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
   applyTheme();
   if (current === 'home') renderHome();
   if (current === 'stats') renderStats();
@@ -1245,7 +1255,15 @@ function shuffle(a) {
 const SCREENS = ['home', 'study', 'done', 'browse', 'stats'];
 let current = 'home';
 
-function go(name) {
+function focusScreen(name) {
+  const screen = $('#s-' + name);
+  const target = screen.querySelector('h1, h2') || screen.querySelector('.body');
+  if (!target) return;
+  if (!target.hasAttribute('tabindex')) target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+}
+
+function go(name, moveFocus = false) {
   current = name;
   for (const s of SCREENS) $('#s-' + s).hidden = s !== name;
   $('#nav').hidden = name === 'study';
@@ -1271,12 +1289,13 @@ function go(name) {
     // Its own id, not a borrowed "main": two elements answering to the same one
     // means querySelector picks the first, which is on a screen that is hidden.
     if (!body.id) body.id = name + '-main';
+    body.tabIndex = -1;
     $('.skip').setAttribute('href', '#' + body.id);
   }
   // Tapping a tab leaves focus on the tab, which is the last thing in the
   // document: for a keyboard the next Tab leaves the page entirely. Land on the
   // heading of the screen that just appeared instead.
-  if (name === 'browse') $('#s-browse h1').focus({ preventScroll: true });
+  if (moveFocus) focusScreen(name);
 }
 
 /* Tapping a tab, as opposed to the app moving itself between screens.
@@ -1289,10 +1308,10 @@ function go(name) {
 function goTab(name) {
   if (name === 'home') {
     if (stops[stops.length - 1] === 'tab') { history.back(); return; }
-    go('home');
+    go('home', true);
     return;
   }
-  go(name);
+  go(name, true);
   if (stops[stops.length - 1] !== 'tab') pushStop('tab');
 }
 
@@ -1396,7 +1415,9 @@ function renderInstall() {
   // their place on iOS, where the browser cannot do it for you.
   $('#install-note').textContent = MuninInstall.event
     ? 'Spacing only pays if you turn up. One tap from your home screen, and the cards work with no signal.'
-    : 'Spacing only pays if you turn up. Tap the share button, then “Add to Home Screen”, and it is one tap from then on.';
+    : MuninInstall.firefoxAndroid()
+      ? 'Spacing only pays if you turn up. Open the Firefox menu and choose “Install”; it is one tap from then on.'
+      : 'Spacing only pays if you turn up. Tap the share button, then “Add to Home Screen”, and it is one tap from then on.';
 }
 
 function renderHome() {
@@ -1646,6 +1667,17 @@ function showCard() {
   void qa.offsetWidth;
   qa.classList.add('in');
   $('#reveal-btn').focus({ preventScroll: true });
+  // On a short landscape phone the header and dock can leave only a sliver of
+  // card space. Start that space on the question, not on a clipped "new" chip.
+  requestAnimationFrame(() => {
+    if (!session || current !== 'study') return;
+    const sc = $('#card-scroll');
+    const box = sc.getBoundingClientRect();
+    const q = $('#card-q').getBoundingClientRect();
+    const visible = Math.max(0,
+      Math.min(box.bottom, q.bottom) - Math.max(box.top, q.top));
+    if (visible < Math.min(28, q.height)) sc.scrollTop += q.top - box.top;
+  });
 }
 
 /** Bring the answer on screen, which revealing it used to leave to luck.
@@ -2533,7 +2565,7 @@ function runSync(loud) {
   // A function, not a value: a queued sync must read the state as it is when
   // its turn comes, and adoptSynced replaces the object wholesale.
   return DSSync.sync(() => state)
-    .then(() => { if (loud) toast('Synced.'); })
+    .then((merged) => { if (loud && merged !== undefined) toast('Synced.'); })
     .catch((e) => { if (loud) toast(`Could not sync: ${e.message || 'no connection'}.`); });
 }
 
@@ -2776,7 +2808,7 @@ addEventListener('popstate', () => {
   if (top === 'study') return leaveStudy(true);
   // A tab is one press above the course's home screen, however many tabs you
   // walked through to get to this one.
-  if (top === 'tab') return go('home');
+  if (top === 'tab') return go('home', true);
   // No stop recorded. A reload leaves the pushed history entries behind while
   // `stops` starts empty, and a fragment link fires popstate of its own. Unwind
   // whatever is actually open rather than doing nothing, which reads as a Back
@@ -3212,7 +3244,10 @@ function wire() {
     const what = act.dataset.sync;
 
     if (what === 'new') {
-      DSSync.turnOn();
+      if (!DSSync.turnOn()) {
+        toast('Sync could not be turned on because device storage is blocked.', true);
+        return;
+      }
       $('#sync-join').hidden = true;
       renderSyncState();
       runSync();
@@ -3237,7 +3272,10 @@ function wire() {
     }
     if (what === 'off') {
       if (!confirm('Turn off sync on this device?\n\nProgress stays here, and stays on the server for your other devices. Keep the key if you might turn it back on.')) return;
-      DSSync.turnOff();
+      if (!DSSync.turnOff()) {
+        toast('Sync could not be turned off because device storage is blocked.', true);
+        return;
+      }
       $('#sync-join').hidden = true;
       renderSyncState();
       toast('Sync is off on this device.');
@@ -3253,7 +3291,10 @@ function wire() {
       return;
     }
     if (!confirm('Join the deck this key belongs to?\n\nThe progress on this device and the progress on that one are merged into a single deck — nothing is thrown away.')) return;
-    DSSync.turnOn(key);
+    if (!DSSync.turnOn(key)) {
+      toast('Sync could not be turned on because device storage is blocked.', true);
+      return;
+    }
     e.target.hidden = true;
     renderSyncState();
     runSync(true);
@@ -3282,7 +3323,13 @@ function wire() {
     renderBackupState();
   });
 
-  $('#import-btn').addEventListener('click', () => $('#import-file').click());
+  $('#import-btn').addEventListener('click', () => {
+    if (globalThis.DSSync && DSSync.enabled()) {
+      toast('Copy your Sync key and turn Sync off before restoring an exact backup.', true);
+      return;
+    }
+    $('#import-file').click();
+  });
   $('#import-file').addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = '';                       // so re-picking the same file fires again
@@ -3395,6 +3442,10 @@ function wire() {
   }
 
   $('#reset-btn').addEventListener('click', () => {
+    if (globalThis.DSSync && DSSync.enabled()) {
+      toast('Copy your Sync key and turn Sync off before erasing this device, or the shared copy would return.', true);
+      return;
+    }
     if (!confirm('Erase all review history on this device? Export a backup first if you might want it back.')) return;
     try {
       publishStateReset();

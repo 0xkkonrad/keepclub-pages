@@ -25,6 +25,7 @@ const KEY_CHARS = 25;
 const GROUP = 5;
 const RETRY_WAIT = 1200;
 const MAX_ROUNDS = 4;
+const REQUEST_TIMEOUT = 15000;
 
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : (d || 0));
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
@@ -40,6 +41,17 @@ let cfg = {
 let running = null;
 let pending = null;
 let timer = null;
+const requests = new Set();
+// A network response belongs to the identity that started it. Turning Sync off
+// or joining a different key increments this generation, so an old response
+// cannot put the removed key back into storage or merge the old account into
+// the new one.
+let identityGeneration = 0;
+
+function cancelRequests() {
+  for (const request of requests) request.abort();
+  requests.clear();
+}
 
 /* ─────────────────────────── keys ─────────────────────────── */
 
@@ -103,8 +115,10 @@ function readBox() {
 function writeBox(box) {
   try {
     localStorage.setItem(KEY, JSON.stringify(box));
+    return true;
   } catch (e) {
     // Sync still works for this page; it simply cannot resume after a reload.
+    return false;
   }
 }
 
@@ -166,17 +180,25 @@ function turnOn(input) {
     : { v: 1, key, courses: {} };
   box.courses = obj(box.courses);
   if (!box.courses[cfg.app]) box.courses[cfg.app] = { rev: 0, at: 0, err: '' };
-  writeBox(box);
+  if (!writeBox(box)) return null;
+  identityGeneration++;
+  cancelRequests();
   return key;
 }
 
 function turnOff() {
+  let removed = false;
   try {
     localStorage.removeItem(KEY);
+    removed = localStorage.getItem(KEY) === null;
   } catch (e) {
-    // Nothing else to do: the in-memory page will stop scheduling immediately.
+    // The UI must not claim Sync is off when storage refused the change.
   }
+  if (!removed) return false;
+  identityGeneration++;
+  cancelRequests();
   clearTimeout(timer);
+  return true;
 }
 
 /* ─────────────────────────── merge ─────────────────────────── */
@@ -193,10 +215,23 @@ function stable(value) {
 function pickRec(x, y) {
   if (!x) return y;
   if (!y) return x;
-  if (num(x.rp) !== num(y.rp)) return num(x.rp) > num(y.rp) ? x : y;
-  if (num(x.due) !== num(y.due)) return num(x.due) > num(y.due) ? x : y;
-  if (num(x.lp) !== num(y.lp)) return num(x.lp) < num(y.lp) ? x : y;
-  return stable(x) <= stable(y) ? x : y;
+  let winner;
+  if (num(x.rp) !== num(y.rp)) winner = num(x.rp) > num(y.rp) ? x : y;
+  // Equal review counts are divergent answers to the same card. Keep the
+  // relearning schedule when only one device lapsed, then the earlier due
+  // date. Lapse count itself cannot choose the schedule: it is merged by max
+  // below, and feeding that derived value back into the comparison made a
+  // three-device merge depend on grouping order.
+  else if ((x.st === 'l') !== (y.st === 'l')) winner = x.st === 'l' ? x : y;
+  else if (num(x.due) !== num(y.due)) winner = num(x.due) < num(y.due) ? x : y;
+  else {
+    const xSchedule = Object.assign({}, x, { lp: 0 });
+    const ySchedule = Object.assign({}, y, { lp: 0 });
+    winner = stable(xSchedule) <= stable(ySchedule) ? x : y;
+  }
+  // Lapses are a lifetime counter. A later review record can legitimately win
+  // the schedule while still having forked before a lapse on another device.
+  return Object.assign({}, winner, { lp: Math.max(num(x.lp), num(y.lp)) });
 }
 
 function prevKey(key) {
@@ -216,17 +251,16 @@ function streakFrom(days, lastDay) {
 }
 
 function mergeSettings(x, y) {
-  let winner, loser;
+  let winner;
   if (num(x.at) !== num(y.at)) {
-    [winner, loser] = num(x.at) > num(y.at) ? [x, y] : [y, x];
+    winner = num(x.at) > num(y.at) ? x : y;
   } else {
-    [winner, loser] = stable(x) <= stable(y) ? [x, y] : [y, x];
+    winner = stable(x) <= stable(y) ? x : y;
   }
-  const out = Object.assign({}, winner);
-  if (!out.examDate && !out.examSkipped && loser.examDate) {
-    out.examDate = loser.examDate;
-  }
-  return out;
+  // Settings are one last-write-wins block. Filling an empty exam date from
+  // the loser resurrected dates that a newer device had explicitly cleared
+  // and made a three-way merge depend on grouping order.
+  return Object.assign({}, winner);
 }
 
 /* Commutative and idempotent: syncing the same pair repeatedly cannot inflate
@@ -288,15 +322,28 @@ function mergeState(a, b) {
 /* ─────────────────────────── transport ─────────────────────────── */
 
 async function rpc(fn, body) {
-  const response = await fetch(ENDPOINT + '/rest/v1/rpc/' + fn, {
-    method: 'POST',
-    headers: {
-      apikey: ANON,
-      Authorization: 'Bearer ' + ANON,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const stop = new AbortController();
+  requests.add(stop);
+  const timeout = setTimeout(() => stop.abort(), REQUEST_TIMEOUT);
+  let response;
+  try {
+    response = await fetch(ENDPOINT + '/rest/v1/rpc/' + fn, {
+      method: 'POST',
+      headers: {
+        apikey: ANON,
+        Authorization: 'Bearer ' + ANON,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: stop.signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') throw new Error('sync timed out');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    requests.delete(stop);
+  }
   const text = await response.text();
   let parsed = null;
   try {
@@ -312,7 +359,7 @@ async function rpc(fn, body) {
   return parsed;
 }
 
-async function syncOnce(local) {
+async function syncOnce(local, generation) {
   const record = readLocal();
   if (!record) throw new Error('sync is off');
   const keyHash = await hashKey(record.key);
@@ -341,7 +388,11 @@ async function syncOnce(local) {
         p_data: state,
       });
     } catch (error) {
-      if (error.code === '53400' && round < MAX_ROUNDS - 1) {
+      // A first-write race produces 23505: both devices observed no row and
+      // one inserted first. Retrying turns it into the ordinary revision
+      // conflict path. 53400 is the backend's one-write-per-second throttle.
+      if ((error.code === '53400' || error.code === '23505')
+          && round < MAX_ROUNDS - 1) {
         await sleep(RETRY_WAIT);
         continue;
       }
@@ -362,11 +413,16 @@ async function syncOnce(local) {
   }
 
   if (changed) throw new Error('sync stayed busy; it will retry');
+  const current = readLocal();
+  if (generation !== identityGeneration || !current || current.key !== record.key) {
+    return { state, stale: true };
+  }
   writeLocal({ key: record.key, rev, at: Date.now(), err: '' });
-  return state;
+  return { state, stale: false };
 }
 
 function sync(source) {
+  if (!enabled()) return Promise.resolve();
   if (running) {
     if (!pending) {
       pending = running.catch(() => {}).then(() => {
@@ -377,14 +433,23 @@ function sync(source) {
     return pending;
   }
 
+  const generation = identityGeneration;
   cfg.onStatus({ busy: true });
-  running = syncOnce(typeof source === 'function' ? source() : source)
-    .then((merged) => {
-      cfg.onMerged(merged);
+  running = syncOnce(typeof source === 'function' ? source() : source, generation)
+    .then((result) => {
+      if (result.stale) {
+        cfg.onStatus({ busy: false });
+        return undefined;
+      }
+      cfg.onMerged(result.state);
       cfg.onStatus({ busy: false, ok: true, at: Date.now() });
-      return merged;
+      return result.state;
     })
     .catch((error) => {
+      if (generation !== identityGeneration) {
+        cfg.onStatus({ busy: false });
+        return undefined;
+      }
       const record = readLocal();
       if (record) {
         writeLocal(Object.assign({}, record, { err: error.message || 'failed' }));

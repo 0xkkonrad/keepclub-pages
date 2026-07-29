@@ -128,6 +128,21 @@ const MuninTheme = {
 };
 globalThis.MuninTheme = MuninTheme;
 
+/* Fragment navigation is not routing. The app uses history entries for
+ * screens and overlays, so letting the skip link write a #fragment also fires
+ * popstate in some browsers and can send the reader back to Home immediately
+ * after they skipped into Progress. Resolve its current target ourselves: the
+ * shell points it at the shelf and app.js points it at the visible screen. */
+document.querySelector('.skip')?.addEventListener('click', (event) => {
+  const href = event.currentTarget.getAttribute('href') || '';
+  if (!href.startsWith('#') || href.length < 2) return;
+  const target = document.getElementById(href.slice(1));
+  if (!target || !target.getClientRects().length) return;
+  event.preventDefault();
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: 'start' });
+});
+
 /* No prefers-color-scheme listener. Sunset used to change the app's colour
  * under an install that had chosen nothing; nothing follows the device now, so
  * there is nothing to follow it with. */
@@ -162,9 +177,18 @@ const MuninInstall = {
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   },
 
+  /* Firefox for Android installs PWAs from its own menu and does not hand the
+   * page a beforeinstallprompt event. Hiding every install surface there made
+   * a supported action undiscoverable. */
+  firefoxAndroid() {
+    return /Android/i.test(navigator.userAgent)
+      && /Firefox\//i.test(navigator.userAgent);
+  },
+
   /** Nothing to say to a browser that can neither prompt nor be told how. */
   offerable() {
-    return !MuninInstall.installed() && (MuninInstall.event || MuninInstall.ios());
+    return !MuninInstall.installed()
+      && (MuninInstall.event || MuninInstall.ios() || MuninInstall.firefoxAndroid());
   },
 
   async prompt() {
@@ -217,7 +241,9 @@ function renderShelfInstall() {
   btn.hidden = !MuninInstall.event;
   steps.hidden = !!MuninInstall.event;
   steps.innerHTML = MuninInstall.event ? ''
-    : '<li>tap the share button in the browser bar</li><li>choose “Add to Home Screen”</li>';
+    : MuninInstall.firefoxAndroid()
+      ? '<li>open the Firefox menu</li><li>choose “Install”</li>'
+      : '<li>tap the share button in the browser bar</li><li>choose “Add to Home Screen”</li>';
 }
 
 function drawnAs(d, cls, style) {
@@ -1327,10 +1353,16 @@ async function renderShelf(asOverlay, say) {
       <ol class="shelf-install-steps"></ol>
       <button type="button" id="shelf-install-btn" hidden>install</button>
     </div>
-    <p class="shelf-note">${asOverlay ? 'tap the ✕ to go back to your course'
+      <p class="shelf-note">${asOverlay ? 'tap the ✕ to go back to your course'
     : 'pick a course — it opens straight here next time'}</p>
   </div>`;
   document.body.appendChild(el);
+  if (!asOverlay) {
+    const main = el.querySelector('.shelf-inner');
+    main.id = 'shelf-main';
+    main.tabIndex = -1;
+    document.querySelector('.skip')?.setAttribute('href', '#shelf-main');
+  }
   el.querySelector('#shelf-theme').addEventListener('click', () => MuninTheme.cycle());
   el.querySelector('#shelf-share').addEventListener('click', (e) =>
     shareShelf(e.currentTarget, el.querySelector('#shelf-share-status')));
@@ -1627,13 +1659,17 @@ async function importLegacyPayload(payload) {
           || !record.deck || !Array.isArray(record.deck.cards)) continue;
 
       let id = oldId;
-      const existing = await store.meta(id);
+      let shouldStore = true;
+      const existing = await store.get(id);
       if (existing) {
-        const theirs = new Set(Array.isArray(existing.ids) ? existing.ids : []);
-        const mine = Array.isArray(record.ids) ? record.ids : [];
-        const overlap = mine.filter((card) => theirs.has(card)).length;
-        const sameDeck = overlap && overlap >= Math.min(theirs.size, mine.length) / 2;
-        if (!sameDeck) {
+        // Migration is an automatic copy, not the importer's explicit
+        // "replace" choice. Card overlap cannot authorize overwriting a newer
+        // deck already at keepclub.app: an older version naturally overlaps
+        // most of its successor. An exact deck is already here; every other
+        // collision gets a new id so both cards and both media sets survive.
+        if (DSSync.stable(existing.deck) === DSSync.stable(record.deck)) {
+          shouldStore = false;
+        } else {
           do {
             id = 'local-' + Date.now().toString(36)
               + Math.floor(Math.random() * 1296).toString(36).padStart(2, '0');
@@ -1653,8 +1689,10 @@ async function importLegacyPayload(payload) {
             ? item.bytes
             : new Uint8Array(item.bytes),
         }));
-      await store.put(Object.assign({}, record, { id }), media);
-      imported++;
+      if (shouldStore) {
+        await store.put(Object.assign({}, record, { id }), media);
+        imported++;
+      }
     }
   }
 

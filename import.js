@@ -124,7 +124,7 @@ export function openImporter() {
   // rectangle is decoration in front of the only control that works.
   const draggable = matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-  function pick() {
+  function pick(moveFocus = false) {
     body.innerHTML = `
       ${draggable ? `<div class="imp-drop" id="imp-drop">
         <b>drop an .apkg here</b>
@@ -142,6 +142,7 @@ export function openImporter() {
       opener.addEventListener('click', () => input.click());
     }
 
+    if (moveFocus) body.querySelector('#imp-file').focus();
     const zone = body.querySelector('.imp-drop');
     if (!zone) return;
     for (const ev of ['dragenter', 'dragover']) {
@@ -174,9 +175,10 @@ export function openImporter() {
   }
 
   function fail(message, detail) {
-    body.innerHTML = `<div class="imp-err"><b>${esc(message)}</b><p>${esc(detail || '')}</p></div>
+    body.innerHTML = `<div class="imp-err" role="alert" tabindex="-1"><b>${esc(message)}</b><p>${esc(detail || '')}</p></div>
       <div class="imp-acts"><button type="button" class="go" data-again>try another file</button></div>`;
-    body.querySelector('[data-again]').addEventListener('click', pick);
+    body.querySelector('.imp-err').focus();
+    body.querySelector('[data-again]').addEventListener('click', () => pick(true));
   }
 
   async function go(file) {
@@ -218,7 +220,8 @@ export function openImporter() {
     // the whole of what the person came for.
     if (!built.deck.cards.length) {
       body.innerHTML = nothingHtml(built.receipt);
-      body.querySelector('[data-again]').addEventListener('click', pick);
+      body.querySelector('.imp-h').focus();
+      body.querySelector('[data-again]').addEventListener('click', () => pick(true));
       return;
     }
 
@@ -251,6 +254,7 @@ export function openImporter() {
       return;
     }
     body.innerHTML = receiptHtml(built.receipt, existing);
+    body.querySelector('.imp-h').focus();
     body.querySelector('[data-cancel]').addEventListener('click', () => close(false));
     for (const b of body.querySelectorAll('[data-keep]')) {
       b.addEventListener('click', () => keep(built, b.dataset.keep === 'replace' ? existing : null));
