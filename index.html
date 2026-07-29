@@ -128,9 +128,11 @@
       <div class="qa">
         <p class="chip-row"><span class="chip" id="card-chip"></span><span class="chip warn" id="leech-chip" hidden>keeps slipping</span></p>
         <div class="question" id="card-q"></div>
+        <div class="side-media" id="card-front-media"></div>
         <div id="answer-wrap" aria-live="polite" hidden>
           <hr class="rule">
           <div class="answer" id="card-a" tabindex="-1"></div>
+          <div class="side-media" id="card-back-media"></div>
           <!-- The labelled doodle for this card. Inline SVG stroked in
                currentColor, so it follows the theme into dark mode and needs
                no second asset. Built by src/figures.py. -->
@@ -159,8 +161,9 @@
       <button class="primary big" id="reveal-btn">Show answer</button>
       <!-- `away`, not `hidden`: the line keeps its place in the dock while the
            question is up, so revealing the answer does not shrink the card. -->
-      <p class="grade-ask away" id="grade-ask">Did you get it right?</p>
-      <div class="grades" id="grade-row" hidden>
+      <p class="grade-ask away" id="grade-ask" role="status"
+         aria-live="polite" aria-atomic="true">Did you get it right?</p>
+      <div class="grades" id="grade-row" role="group" aria-labelledby="grade-ask" hidden>
         <button class="grade g1" data-g="1"><b>Again</b><small id="iv1"></small></button>
         <button class="grade g2" data-g="2"><b>Hard</b><small id="iv2"></small></button>
         <button class="grade g3" data-g="3"><b>Good</b><small id="iv3"></small></button>
@@ -170,7 +173,7 @@
         <button class="link-btn" id="undo-btn" disabled>↶ Undo last answer</button>
         <button class="link-btn" id="end-btn">End session</button>
       </div>
-      <p class="keyhint">Space reveals · 1–4 grades · U undoes</p>
+      <p class="keyhint" id="keyhint">Space reveals · 1–4 grades · U undoes</p>
     </div>
   </section>
 
@@ -335,6 +338,8 @@
           <a id="about-author" href="https://kkonrad.com/" target="_blank"
              rel="author noopener noreferrer">kkonrad</a>.
         </p>
+        <p id="about-shortcuts">Desktop shortcuts: Space reveals; 1–4 grades
+          Again, Hard, Good, or Easy; U undoes.</p>
         <p><a id="about-source" href="https://github.com/0xkkonrad/keepclub"
               target="_blank" rel="noopener noreferrer">source code on github</a></p>
         <p class="about-build" id="build-line"></p>

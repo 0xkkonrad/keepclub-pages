@@ -454,6 +454,10 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 }
 .sect-art { grid-column: 1; grid-row: 1 / span 2; align-self: center;
   width: 26px; height: 26px; color: var(--accent); }
+.course-section-art { position: relative; display: grid; place-items: center; }
+.course-section-art > .doodle, .course-section-art > img {
+  grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain;
+}
 .sections button:active .sect-art { transform: translateY(1px); }
 .sect-meter {
   grid-column: 1 / -1; height: 8px; border-radius: 4px;
@@ -1043,6 +1047,21 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
   display: flex; align-items: center; gap: 12px;
   cursor: pointer; list-style: none; font-weight: 500; font-size: .92rem;
 }
+.browse-static, .browse-prompt {
+  padding: 14px 2px; min-height: var(--tap);
+  font-weight: 500; font-size: .92rem;
+}
+.browse-static:focus { outline: 3px solid var(--accent); outline-offset: 3px; }
+.browse-static .b-sect {
+  display: block; margin-top: 10px; font-size: .72rem; color: var(--muted);
+  font-weight: 400;
+}
+.b-front-media { padding: 0 0 14px; }
+.browse-prompt + .b-front-media { padding-top: 0; }
+.b-answer-toggle {
+  padding-top: 8px !important; padding-bottom: 8px !important;
+  font-size: .78rem !important; color: var(--muted);
+}
 .b-head { flex: 1; min-width: 0; }
 /* Why this card is in the list, when the word you searched for is in the answer
    and the row shows only the question. */
@@ -1308,6 +1327,15 @@ mark {
 #boot-back { margin-top: 4px; }
 .boot-scene { display: grid; place-items: center; }
 .boot-raven { width: 52px; height: 52px; color: var(--accent); animation: hop 2.4s ease-in-out infinite; }
+.boot-course-art {
+  display: block;
+  width: auto; height: auto;
+  max-width: min(240px, 70vw); max-height: 40vh;
+  object-fit: contain;
+}
+.boot-course-art[data-animation="gentle-bob"] { animation: hop 2.4s ease-in-out infinite; }
+.boot-course-art[data-animation="pulse"] { animation: boot-pulse 1.8s ease-in-out infinite; }
+@keyframes boot-pulse { 50% { transform: scale(1.04); opacity: .78; } }
 /* pathLength="1" renormalises the path whatever its real geometry, so one rule
  * draws any drawing on — no measured length per doodle, and redrawing a doodle
  * cannot silently break its own animation. */
@@ -1324,6 +1352,7 @@ mark {
   .boot { transition: none; }
   .boot-raven { animation: none; }
   .boot-raven path { stroke-dashoffset: 0; animation: none; }
+  .boot-course-art { animation: none !important; }
   .pull-refresh,
   .pull-refresh-icon,
   body.pull-refresh-active #app,
@@ -1396,6 +1425,68 @@ mark {
   margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--stroke); color: var(--muted);
 }
 .question ruby rt, .answer ruby rt { font-size: .6em; color: var(--muted); }
+
+.course-media-side {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+.course-media {
+  margin: 0;
+  min-width: 0;
+}
+.course-media img,
+.course-media video {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+  border-radius: var(--r-sm);
+}
+.course-media-image-button {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 6px;
+  background: #fff;
+  border: var(--bw) solid var(--stroke);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
+  cursor: zoom-in;
+}
+.course-media-image-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+.course-media audio {
+  display: block;
+  width: min(100%, 360px);
+  margin-inline: auto;
+}
+.course-media figcaption,
+.course-media-transcript,
+.course-media-missing {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.course-media-caption > :first-child,
+.course-media-transcript-text > :first-child { margin-top: 0; }
+.course-media-caption > :last-child,
+.course-media-transcript-text > :last-child { margin-bottom: 0; }
+.course-media-credit {
+  display: block;
+  margin-top: 4px;
+}
+.course-media-transcript summary {
+  cursor: pointer;
+  color: var(--text);
+}
+.course-media-missing { color: var(--danger); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

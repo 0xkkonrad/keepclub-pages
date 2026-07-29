@@ -12,14 +12,68 @@
 
 import { readApkg, ApkgError, MAX_PACKAGE_BYTES } from './lib/anki.js';
 import { buildDeck, RAVENS } from './lib/deck.js';
+import { readCourseFile } from './lib/course-package.js';
+import {
+  normalizeLegacyCourse,
+  projectDescriptiveCourseToLegacy,
+} from './lib/legacy-course.js';
 import * as store from './lib/store.js';
 import { receiptHtml, nothingHtml, ensureCss, doodle } from './lib/receipt.js';
-import { validateDeck } from './lib/validate.js';
 
 class Cancelled extends Error {}
 
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const n = (v) => Number(v).toLocaleString('en-GB');
+const isKeepFile = (name) => /\.keep(?:\.yml)?$/i.test(String(name || ''));
+const cardIdentity = (card) => card?.cardId;
+const PUBLIC_THEME_FIELDS = [
+  'accentColor', 'accentColorDark', 'accentInkColor', 'accentInkColorDark',
+  'paperColor', 'paperColorDark', 'shelfArtwork', 'sectionArtwork',
+  'loadingArtwork', 'loadingText', 'loadingAnimation',
+];
+
+/* The authored document is retained separately for round trips. Shell chrome
+ * needs only a small, inert view of the fields the public validator already
+ * accepted: never copy an arbitrary theme object into the IndexedDB record
+ * that munin.js later turns into CSS and DOM. */
+function presentationOf(course) {
+  const theme = {};
+  for (const field of PUBLIC_THEME_FIELDS) {
+    if (Object.hasOwn(course.theme, field)) theme[field] = course.theme[field];
+  }
+  return {
+    shortTitle: course.shortTitle,
+    ...(course.tagline === undefined ? {} : { tagline: course.tagline }),
+    theme,
+  };
+}
+
+function keepReceipt(result) {
+  const course = result.course;
+  const mediaCounts = { images: 0, audio: 0, video: 0, bytes: 0 };
+  for (const item of result.media) {
+    if (item.mediaType === 'image') mediaCounts.images++;
+    else if (item.mediaType === 'audio') mediaCounts.audio++;
+    else if (item.mediaType === 'video') mediaCounts.video++;
+    mediaCounts.bytes += item.bytes.length;
+  }
+  return {
+    type: 'keep',
+    title: course.title || course.courseId,
+    courseId: course.courseId,
+    sourceKind: result.sourceKind,
+    read: { cards: course.cards.length },
+    made: {
+      cards: course.cards.length,
+      sections: course.sections.length,
+      groups: course.groups.length,
+    },
+    frontOnly: course.cards.filter((card) =>
+      !card.back && !(card.media || []).some((item) => item.side === 'back')).length,
+    media: mediaCounts,
+    warnings: result.diagnostics.filter((item) => item.severity === 'warning'),
+  };
+}
 
 /* ── the screen ───────────────────────────────────────────────────────────── */
 
@@ -127,15 +181,16 @@ export function openImporter() {
   function pick(moveFocus = false) {
     body.innerHTML = `
       ${draggable ? `<div class="imp-drop" id="imp-drop">
-        <b>drop an .apkg here</b>
-        <p>your cards stay on this device</p>
+        <b>drop a course here</b>
+        <p>.keep.yml, .keep or .apkg · stays on this device</p>
       </div>` : ''}
-      <button type="button" class="imp-file" id="imp-file">choose an .apkg${
+      <button type="button" class="imp-file" id="imp-file">choose a course file${
   draggable ? '' : '<small>your cards stay on this device</small>'}</button>
-      <input type="file" accept=".apkg,.colpkg,application/zip" hidden id="imp-input">
-      <p class="imp-how">in anki: <b>File → Export</b>, choose <b>Anki Deck Package</b>, and
-        include scheduling or not — it makes no difference, keep club starts every card new.
-        Both the current format and the older one are read.</p>`;
+      <input type="file" accept=".keep.yml,.keep,.apkg,.colpkg,application/zip,text/yaml" hidden id="imp-input">
+      <p class="imp-how"><b>keep club courses:</b> choose a text-only <b>.keep.yml</b> or a
+        <b>.keep</b> package with its media. <a href="./docs/#quick-start">See the format.</a><br><br>
+        <b>from anki:</b> <b>File → Export</b>, choose <b>Anki Deck Package</b>. Scheduling
+        does not come across; every card starts new.</p>`;
     const input = body.querySelector('#imp-input');
     input.addEventListener('change', () => { if (input.files[0]) go(input.files[0]); });
     for (const opener of body.querySelectorAll('.imp-file, .imp-drop')) {
@@ -181,6 +236,23 @@ export function openImporter() {
     body.querySelector('[data-again]').addEventListener('click', () => pick(true));
   }
 
+  function failDiagnostics(result) {
+    const errors = result.diagnostics.filter((item) => item.severity === 'error').slice(0, 8);
+    const reference = result.sourceFormat === 'legacy-v1'
+      ? './docs/reference/errors/#legacy-compatibility'
+      : './docs/reference/errors/';
+    body.innerHTML = `<div class="imp-err" role="alert" tabindex="-1"><b>this course needs a fix</b>
+      <p>Nothing was saved. Correct the source, then try it again.</p>
+      <ol class="imp-diags">${errors.map((item) => `<li><code>${esc(item.code)}</code>
+        <span>${esc(item.message)}</span>
+        ${item.line ? `<small>line ${n(item.line)}, column ${n(item.column)}</small>` : ''}
+      <small>${esc(item.correction)}</small></li>`).join('')}</ol></div>
+      <div class="imp-acts"><button type="button" class="go" data-again>try another file</button>
+      <a class="imp-docs" href="${reference}">open the error reference</a></div>`;
+    body.querySelector('.imp-err').focus();
+    body.querySelector('[data-again]').addEventListener('click', () => pick(true));
+  }
+
   async function go(file) {
     working('reading the package…');
     const say = body.querySelector('#imp-say');
@@ -188,23 +260,82 @@ export function openImporter() {
     const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
     await frame();
 
-    let built, col;
+    let built;
     try {
-      if (file.size > MAX_PACKAGE_BYTES) {
-        throw new ApkgError(`that package is too large for this device (${n(file.size)} bytes).`);
+      if (isKeepFile(file.name)) {
+        /* Give the reader the File itself. It can reject an oversized YAML or
+         * archive from File.size before arrayBuffer() reserves that memory. */
+        const result = await readCourseFile(file, { fileName: file.name });
+        if (!result.course) {
+          failDiagnostics(result);
+          return;
+        }
+        built = {
+          kind: 'keep',
+          title: result.course.title || result.course.courseId,
+          sourceCourseId: result.course.courseId,
+          course: result.runtimeCourse,
+          // Keep authored CommonMark on disk. Boot owns the one render pass;
+          // persisting its HTML preview would make a later boot render it as
+          // Markdown a second time.
+          deck: result.authoredCourse,
+          media: result.media,
+          mediaIndexBySource: result.mediaIndexBySource,
+          receipt: keepReceipt(result),
+          presentation: presentationOf(result.course),
+          sectionArt: {},
+          groupArt: {},
+        };
+      } else {
+        if (file.size > MAX_PACKAGE_BYTES) {
+          throw new ApkgError(`that package is too large for this device (${n(file.size)} bytes).`);
+        }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const col = await readApkg(bytes);
+        const legacy = await buildDeck(col, {
+          fileName: file.name,
+          // Closing the sheet mid-build should stop the build, not leave it
+          // grinding through twenty thousand cards for a screen that is gone.
+          yield: () => (el.isConnected ? frame() : Promise.reject(new Cancelled())),
+          onProgress(done, total, stage) {
+            say.textContent = total > 1 ? `${stage} — ${n(done)} of ${n(total)}` : stage + '…';
+            bar.style.width = total ? `${Math.round((done / total) * 100)}%` : '0';
+          },
+        });
+        // Preserve the account-style "nothing landed" receipt before the
+        // permanent adapter (correctly) rejects an empty course.
+        if (!legacy.deck.cards.length) {
+          body.innerHTML = nothingHtml(legacy.receipt);
+          body.querySelector('.imp-h').focus();
+          body.querySelector('[data-again]').addEventListener('click', () => pick(true));
+          return;
+        }
+        /* Anki HTML is already rendered and sanitized, so it must retain the
+         * permanent format-1 content marker in storage. The inverse projection
+         * lives at the same compatibility boundary as its reader; buildDeck
+         * and this importer otherwise use descriptive course fields only. */
+        const storageDeck = projectDescriptiveCourseToLegacy(legacy.deck);
+        const sourceCourseId =
+          `anki-${(hash(JSON.stringify(storageDeck.cards)) >>> 0).toString(36)}`;
+        const normalized = normalizeLegacyCourse(storageDeck, { courseId: sourceCourseId });
+        if (!normalized.course) {
+          failDiagnostics(normalized);
+          return;
+        }
+        built = {
+          ...legacy,
+          kind: 'anki',
+          title: legacy.deck.title,
+          sourceCourseId,
+          course: normalized.course,
+          // Existing Anki HTML has safe constructs outside public CommonMark
+          // (ruby, audio placeholders, sub/sup). Keep its proven format-1
+          // artifact on disk so the permanent adapter retains the
+          // sanitized-HTML representation marker on every read.
+          deck: storageDeck,
+          mediaIndexBySource: {},
+        };
       }
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      col = await readApkg(bytes);
-      built = await buildDeck(col, {
-        fileName: file.name,
-        // Closing the sheet mid-build should stop the build, not leave it
-        // grinding through twenty thousand cards for a screen that is gone.
-        yield: () => (el.isConnected ? frame() : Promise.reject(new Cancelled())),
-        onProgress(done, total, stage) {
-          say.textContent = total > 1 ? `${stage} — ${n(done)} of ${n(total)}` : stage + '…';
-          bar.style.width = total ? `${Math.round((done / total) * 100)}%` : '0';
-        },
-      });
     } catch (e) {
       if (e instanceof Cancelled) return;
       console.error(e);
@@ -212,32 +343,6 @@ export function openImporter() {
       else if (e && /quota|storage/i.test(e.name + e.message)) {
         fail('there is no room for this deck', 'the browser is out of space for this site.');
       } else fail('something went wrong reading that deck', e?.message || String(e));
-      return;
-    }
-
-    // Not fail(): the receipt is already built and holds the reasons and the
-    // examples. Throwing it away here threw it away in the one case where it is
-    // the whole of what the person came for.
-    if (!built.deck.cards.length) {
-      body.innerHTML = nothingHtml(built.receipt);
-      body.querySelector('.imp-h').focus();
-      body.querySelector('[data-again]').addEventListener('click', () => pick(true));
-      return;
-    }
-
-    // The same description of a deck that app.js checks at boot. A deck that
-    // would not open is caught here, in front of the person who still has the
-    // file, rather than on the next cold start with nothing to go back to.
-    let v;
-    try {
-      v = validateDeck(built.deck);
-    } catch (e) {
-      console.error(e);
-      v = { ok: false, errors: [e?.message || String(e)] };
-    }
-    if (!v.ok) {
-      console.error('built deck:', v.errors);
-      fail('that deck came out in a shape keep club cannot study', v.errors[0]);
       return;
     }
 
@@ -267,12 +372,43 @@ export function openImporter() {
    * record whose card id is not in the deck, so the first boot after such a
    * replace silently wipes the lot. Match on the cards, and say which it is. */
   function match(decks, built) {
-    const same = decks.filter((d) => d.title === built.deck.name);
+    const mine = new Set(built.course.cards.map(cardIdentity).filter(Boolean));
+    const identified = decks.filter((deck) =>
+      deck.sourceCourseId && deck.sourceCourseId === built.sourceCourseId);
+    if (identified.length) {
+      const current = identified[0];
+      const old = new Set(current.ids || []);
+      const unchanged = [...mine].filter((id) => old.has(id)).length;
+      return {
+        ...current,
+        sameDeck: true,
+        updateDelta: {
+          unchanged,
+          added: mine.size - unchanged,
+          removed: old.size - unchanged,
+        },
+      };
+    }
+    const same = decks.filter((d) => d.title === built.title);
     if (!same.length) return null;
-    const mine = new Set(built.deck.cards.map((c) => c.i));
+    /* Public identity is explicit. A different courseId remains a different
+     * course even if a creator reused a title and some card IDs; the overlap
+     * heuristic below exists only for Anki exports whose source ID is derived
+     * from a changing set of imported cards. */
+    if (built.kind === 'keep') return { ...same[0], sameDeck: false };
     for (const d of same) {
       const overlap = (d.ids || []).filter((i) => mine.has(i)).length;
-      if (overlap && overlap >= Math.min(d.cards, mine.size) / 2) return { ...d, sameDeck: true };
+      if (overlap && overlap >= Math.min(d.cards, mine.size) / 2) {
+        return {
+          ...d,
+          sameDeck: true,
+          updateDelta: {
+            unchanged: overlap,
+            added: mine.size - overlap,
+            removed: Math.max(0, (d.ids || []).length - overlap),
+          },
+        };
+      }
     }
     return { ...same[0], sameDeck: false };
   }
@@ -293,17 +429,21 @@ export function openImporter() {
     try {
       await store.put({
         id,
-        title: built.deck.name,
+        title: built.title,
+        sourceCourseId: built.sourceCourseId,
+        importFormat: built.kind,
         created: replacing ? replacing.created : Date.now(),
         updated: Date.now(),
-        cards: built.deck.cards.length,
+        cards: built.course.cards.length,
         // Kept so a later import can tell "the same deck again" from "another
         // deck with the same name" without loading every card.
-        ids: built.deck.cards.map((c) => c.i),
-        art: RAVENS[Math.abs(hash(built.deck.name)) % RAVENS.length],
+        ids: built.course.cards.map(cardIdentity),
+        art: RAVENS[Math.abs(hash(built.title)) % RAVENS.length],
         sectionArt: built.sectionArt,
         groupArt: built.groupArt,
+        mediaIndexBySource: built.mediaIndexBySource,
         receipt: built.receipt,
+        ...(built.presentation ? { presentation: built.presentation } : {}),
         deck: built.deck,
       }, built.media);
     } catch (e) {

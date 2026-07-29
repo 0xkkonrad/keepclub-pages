@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Create portable keep club flashcard courses with plain YAML, optional metadata, Markdown, and bundled media.">
+  <meta name="theme-color" content="#fffdf7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1e25" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://keepclub.app/docs/">
+  <link rel="icon" href="../icon-192.png">
+  <link rel="stylesheet" href="docs.css">
+  <title>Course creator docs · keep club</title>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to the docs</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./" aria-label="keep club course docs home">
+        <img src="tower.svg" alt="" width="36" height="36">
+        <span>keep club <small>course docs</small></span>
+      </a>
+      <nav class="top-links" aria-label="External">
+        <a href="https://github.com/0xkkonrad/keepclub">source</a>
+        <a href="https://keepclub.app/">open the app ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="side" aria-label="Documentation">
+      <strong>Start here</strong>
+      <a href="#quick-start">Smallest course</a>
+      <a href="#optional-by-default">Optional by default</a>
+      <a href="#cards">Card examples</a>
+      <strong>Authoring</strong>
+      <a href="#markdown">Markdown</a>
+      <a href="#organization">Sections, groups, tags</a>
+      <a href="#media">Media and .keep files</a>
+      <a href="#validation">Validation</a>
+      <strong>Reference</strong>
+      <a href="#fields">Field tables</a>
+      <a href="#identity">IDs and progress</a>
+      <a href="#tooling">Bring your own tools</a>
+      <a href="#evolution">Extensions and evolution</a>
+      <a href="reference/errors/">Diagnostic codes</a>
+      <a href="schema/course-v2.schema.json">JSON Schema ↧</a>
+    </nav>
+
+    <main id="content">
+      <details class="mobile-nav">
+        <summary>On this page</summary>
+        <nav aria-label="Mobile documentation">
+          <a href="#quick-start">Smallest course</a>
+          <a href="#cards">Card examples</a>
+          <a href="#markdown">Markdown</a>
+          <a href="#media">Media and packages</a>
+          <a href="#fields">Field tables</a>
+          <a href="reference/errors/">Diagnostic codes</a>
+        </nav>
+      </details>
+
+      <p class="eyebrow">Public course format · version 2</p>
+      <h1>Bring your own tools. Ship clear cards.</h1>
+      <p class="lede">A keep club course is plain, readable YAML. Start with two
+        prompts and nothing else. Add answers, organization, attribution,
+        media, or visual identity only when they help.</p>
+      <div class="actions">
+        <a class="button" href="#quick-start">Make the smallest course</a>
+        <a class="button secondary" href="schema/course-v2.schema.json"
+          download>Download the JSON Schema</a>
+      </div>
+
+      <div class="principles" aria-label="Format principles">
+        <article>
+          <h2>One course, not two layers</h2>
+          <p>There is no “simple” and “advanced” format. Optional fields extend
+            the same course object.</p>
+        </article>
+        <article>
+          <h2>Human names at the boundary</h2>
+          <p>Creators write <code>courseId</code>, <code>cardId</code>,
+            <code>front</code>, and <code>back</code>—not runtime abbreviations.</p>
+        </article>
+        <article>
+          <h2>Progress stays out</h2>
+          <p>A course contains material and presentation. Scheduling state
+            belongs to the learner and is never part of the artifact.</p>
+        </article>
+      </div>
+
+      <section id="quick-start">
+        <h2>The smallest useful course</h2>
+        <p>Create a UTF-8 file named <code>course.keep.yml</code>:</p>
+<pre data-course-example><code>schemaVersion: 2
+courseId: daily-prompts
+
+cards:
+  - cardId: plan-tomorrow
+    front: Write down tomorrow's three priorities.
+
+  - cardId: recall-the-day
+    front: Recall three things you learned today.</code></pre>
+        <p>That is a complete course. It has two front-only cards, no theme,
+          no sections, and no title. keep club derives a display title from
+          <code>daily-prompts</code>, creates one “All cards” section, and uses
+          the app’s normal tower and colors.</p>
+
+        <ol class="steps">
+          <li><strong>Choose stable IDs.</strong> Use lowercase names you will
+            not need to change when wording changes.</li>
+          <li><strong>Write the prompts.</strong> Each record is one review
+            card. Add <code>back</code> only when there is something to reveal.</li>
+          <li><strong>Keep it as YAML.</strong> Text-only courses are just this
+            file. If you add local media, put the file and assets into a
+            <code>.keep</code> ZIP.</li>
+          <li><strong>Preview before keeping.</strong> Errors block the whole
+            course. Warnings explain defaults and quality concerns before you
+            continue.</li>
+        </ol>
+      </section>
+
+      <section id="optional-by-default">
+        <h2>Optional by default</h2>
+        <p>The minimal contract is intentionally small:</p>
+        <ul>
+          <li>a course has <code>schemaVersion: 2</code>, a stable
+            <code>courseId</code>, and at least one card;</li>
+          <li>a card has a stable <code>cardId</code> and something renderable
+            on its front—text, front-side media, or both;</li>
+          <li>everything else can be omitted.</li>
+        </ul>
+        <div class="callout">
+          <p><strong>Omit what you do not mean.</strong> You do not need empty
+            arrays, blank theme values, placeholder sections, or a
+            <code>back: ""</code>. A blank back is accepted for forgiving
+            tooling, but it warns and normalizes to no back.</p>
+        </div>
+        <p>Strong defaults never rescue malformed values. An absent
+          <code>title</code> gets a useful default; a present title of the wrong
+          type is an error.</p>
+      </section>
+
+      <section id="cards">
+        <h2>What one card means</h2>
+        <p>One record is one scheduled review card. Format 2 starts with one
+          primitive: front → optional back. It does not generate multiple
+          review directions from a note.</p>
+
+        <h3>Front and back</h3>
+<pre data-course-example><code>schemaVersion: 2
+courseId: knot-basics
+title: Knot basics
+
+cards:
+  - cardId: bowline-purpose
+    front: What is a bowline used for?
+    back: A **fixed loop** that neither slips nor jams.
+
+  - cardId: name-three
+    front: Name three knots you can tie without looking.</code></pre>
+        <p>The first card reveals an answer. The second is front-only: there is
+          no empty answer screen to click through, so the learner proceeds
+          directly to self-grading.</p>
+
+        <h3>A course with optional organization</h3>
+<pre data-course-example><code>schemaVersion: 2
+courseId: garden-basics
+title: Garden basics
+
+sections:
+  - sectionId: soil
+    title: Soil
+  - sectionId: watering
+    title: Watering
+
+cards:
+  - cardId: compost-purpose
+    sectionId: soil
+    front: What does compost add to soil?
+    back: Organic matter and slowly released nutrients.
+    tags: [soil-health]
+
+  - cardId: water-morning
+    sectionId: watering
+    front: Why water early in the morning?
+    back: Less evaporates, and leaves can dry during the day.</code></pre>
+        <p>Sections control navigation. Tags are independent labels. Neither
+          is required for a valid course.</p>
+      </section>
+
+      <section id="markdown">
+        <h2>Markdown inside readable fields</h2>
+        <p><code>front</code>, <code>back</code>, descriptions, captions, and
+          transcripts use the same documented CommonMark subset.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Construct</th><th>Format 2</th><th>Example</th></tr></thead>
+            <tbody>
+              <tr><td>Paragraphs and line breaks</td><td class="yes">Yes</td><td>blank line / two trailing spaces</td></tr>
+              <tr><td>Emphasis and strong</td><td class="yes">Yes</td><td><code>*term*</code>, <code>**answer**</code></td></tr>
+              <tr><td>Ordered and unordered lists</td><td class="yes">Yes</td><td><code>- item</code>, <code>1. item</code></td></tr>
+              <tr><td>Links</td><td class="yes">HTTPS or mailto</td><td><code>[source](https://…)</code></td></tr>
+              <tr><td>Raw HTML</td><td class="no">Shown as text</td><td>never trusted as markup</td></tr>
+              <tr><td>Markdown images</td><td class="no">No</td><td>use an explicit media object</td></tr>
+              <tr><td>Headings, code, quotes, rules</td><td class="no">No</td><td>diagnosed with an inert preview</td></tr>
+              <tr><td>Tables</td><td class="no">Literal text</td><td>pipe syntax does not become a table</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Rendered output is sanitized before storage. A hostile link keeps
+          its readable label but cannot be clicked. Inline HTML is escaped
+          visibly rather than silently disappearing.</p>
+      </section>
+
+      <section id="organization">
+        <h2>Sections, groups, and tags</h2>
+        <p>Organization is additive:</p>
+        <ul>
+          <li><strong>No sections:</strong> keep club derives one
+            <code>all-cards</code> section.</li>
+          <li><strong>One section:</strong> cards may omit
+            <code>sectionId</code>; it is unambiguous.</li>
+          <li><strong>Several sections:</strong> every card names its section.</li>
+          <li><strong>Groups:</strong> if present, they place every declared
+            section into exactly one group.</li>
+          <li><strong>Tags:</strong> independent of navigation and limited to
+            64 per card.</li>
+        </ul>
+      </section>
+
+      <section id="media">
+        <h2>Media and the <code>.keep</code> package</h2>
+        <p>Images, audio, and video are explicit card media. Their paths point
+          to files in the package, never remote URLs.</p>
+<pre><code>cards:
+  - cardId: robin-song
+    front: Which bird is singing?
+    back: A European robin.
+    media:
+      - mediaId: robin-audio
+        side: front
+        mediaType: audio
+        source: media/robin-song.opus
+        mimeType: audio/ogg
+        transcript: A bright, liquid series of phrases.
+        credit:
+          name: Example Naturalist
+
+      - mediaId: robin-photo
+        side: back
+        mediaType: image
+        source: media/robin.webp
+        alternativeText: A robin perched on a bare branch.
+        width: 1600
+        height: 1067</code></pre>
+        <p>Package those files without adding a wrapper directory:</p>
+<pre class="tree"><code>bird-calls.keep
+├── course.keep.yml
+└── media
+    ├── robin-song.opus
+    └── robin.webp</code></pre>
+        <ul>
+          <li><code>course.keep.yml</code> is at the ZIP root.</li>
+          <li>Paths are normalized, relative, case-stable, and cannot contain
+            <code>..</code>, backslashes, URL schemes, or empty components.</li>
+          <li>keep club sniffs file bytes and checks them against the declared
+            type, MIME type, and extension.</li>
+          <li>That check identifies the container, not every codec or damaged
+            payload. Decode failures show as unavailable media; publication
+            tooling should probe or transcode for its target browsers.</li>
+          <li>Published images need dimensions and meaningful alternative text
+            unless decorative. Published video needs captions or a transcript.</li>
+          <li>Imports are atomic: a missing or broken asset cannot silently
+            discard a card.</li>
+        </ul>
+      </section>
+
+      <section id="validation">
+        <h2>Validation is three separate questions</h2>
+        <ol class="steps">
+          <li><strong>Can it be read?</strong> Safe YAML 1.2, known fields,
+            types, lengths, and shape. Duplicate keys, aliases, custom tags,
+            and multiple YAML documents are errors.</li>
+          <li><strong>Does it hold together?</strong> Unique IDs, valid
+            references, renderable fronts, safe package paths, present assets,
+            supported media, and bounded sizes.</li>
+          <li><strong>Will it be a good course?</strong> Non-blocking advice
+            about long sides, weak alternative text, missing attribution,
+            duplicate-looking cards, or front-only prompts that promise an
+            answer.</li>
+        </ol>
+        <div class="callout warning">
+          <p><strong>Errors block the whole import.</strong> Warnings may
+            proceed only through preview. The receipt lists defaults,
+            normalizations, warnings, and rejections—never a quietly dropped
+            card or asset.</p>
+        </div>
+        <p>Every diagnostic has a stable code, severity, data path, message,
+          correction, and documentation link. See the
+          <a href="reference/errors/">diagnostic code reference</a>.</p>
+      </section>
+
+      <section id="fields">
+        <h2>Field reference</h2>
+        <h3>Course</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Field</th><th>Required</th><th>Meaning when present</th></tr></thead>
+            <tbody>
+              <tr><td><code>schemaVersion</code></td><td>Yes</td><td>Integer <code>2</code>.</td></tr>
+              <tr><td><code>courseId</code></td><td>Yes</td><td>Stable creator-owned identity.</td></tr>
+              <tr><td><code>cards</code></td><td>Yes</td><td>One to 50,000 card records, in presentation order.</td></tr>
+              <tr><td><code>title</code>, <code>shortTitle</code>, <code>tagline</code>, <code>description</code></td><td>No</td><td>Human-facing course copy.</td></tr>
+              <tr><td><code>contentLanguage</code>, <code>instructionLanguage</code></td><td>No</td><td>BCP 47-style language tags; never guessed.</td></tr>
+              <tr><td><code>authors</code>, <code>license</code>, <code>source</code></td><td>No</td><td>Attribution and provenance. A license is required to publish through keep club.</td></tr>
+              <tr><td><code>sections</code>, <code>groups</code></td><td>No</td><td>Optional navigation hierarchy.</td></tr>
+              <tr><td><code>theme</code></td><td>No</td><td>Safe colors, packaged raster art, loading copy, and an app-owned animation.</td></tr>
+              <tr><td><code>extensions</code></td><td>No</td><td>Namespaced inert tool data.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Section and group</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Record</th><th>Required fields</th><th>Optional fields and rules</th></tr></thead>
+            <tbody>
+              <tr><td>Section</td><td><code>sectionId</code>, <code>title</code></td><td><code>description</code>, <code>extensions</code>. Omit the whole list for one generated <code>all-cards</code> section.</td></tr>
+              <tr><td>Group</td><td><code>groupId</code>, <code>title</code>, <code>sectionIds</code></td><td><code>description</code>, <code>extensions</code>. If groups exist, every declared section appears exactly once.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Card</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Field</th><th>Required</th><th>Meaning when present</th></tr></thead>
+            <tbody>
+              <tr><td><code>cardId</code></td><td>Yes</td><td>Stable progress identity inside the course.</td></tr>
+              <tr><td><code>front</code></td><td>Conditional</td><td>Markdown prompt; front media may supply the renderable front instead.</td></tr>
+              <tr><td><code>back</code></td><td>No</td><td>Markdown answer. Omission means front-only unless back media exists.</td></tr>
+              <tr><td><code>sectionId</code></td><td>No</td><td>Required only when several declared sections make omission ambiguous.</td></tr>
+              <tr><td><code>tags</code></td><td>No</td><td>Independent descriptive labels.</td></tr>
+              <tr><td><code>media</code></td><td>No</td><td>Up to 16 explicit front/back media objects.</td></tr>
+              <tr><td><code>extensions</code></td><td>No</td><td>Namespaced inert tool data.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Media</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>side</code>, <code>mediaType</code>, <code>source</code></td><td>Yes</td><td>Front/back, image/audio/video, and local package path.</td></tr>
+              <tr><td><code>mediaId</code>, <code>mimeType</code></td><td>No</td><td>Stable media identity and an assertion checked against bytes.</td></tr>
+              <tr><td><code>alternativeText</code>, <code>decorative</code>, <code>width</code>, <code>height</code></td><td>No</td><td>Image accessibility and dimensions.</td></tr>
+              <tr><td><code>caption</code>, <code>transcript</code>, <code>captionTracks</code></td><td>No</td><td>Readable and timed text alternatives.</td></tr>
+              <tr><td><code>posterImage</code>, <code>durationSeconds</code>, <code>credit</code></td><td>No</td><td>Playback presentation and attribution.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Attribution and provenance</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Record</th><th>Fields</th><th>Rule</th></tr></thead>
+            <tbody>
+              <tr><td>Author</td><td><code>name</code>, <code>website</code>, <code>email</code></td><td><code>name</code> is required for each author; websites use HTTPS.</td></tr>
+              <tr><td>License</td><td><code>identifier</code>, <code>name</code>, <code>website</code>, <code>attribution</code></td><td>Optional for private import; at least one field and a license are required for keep club publication.</td></tr>
+              <tr><td>Source</td><td><code>website</code>, <code>repository</code></td><td>At least one HTTPS source link when the record is present.</td></tr>
+              <tr><td>Media credit</td><td><code>name</code>, <code>website</code></td><td><code>name</code> is required when a credit is present.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Theme</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fields</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>accentColor</code>, <code>accentColorDark</code>, <code>accentInkColor</code>, <code>accentInkColorDark</code></td><td>Six- or eight-digit hex accent and on-accent colors for light and dark presentation.</td></tr>
+              <tr><td><code>paperColor</code>, <code>paperColorDark</code></td><td>Light and dark paper colors.</td></tr>
+              <tr><td><code>shelfArtwork</code>, <code>sectionArtwork</code>, <code>loadingArtwork</code></td><td>Normalized relative paths to packaged raster assets.</td></tr>
+              <tr><td><code>loadingText</code></td><td>Short loading copy; defaults to “Loading…”.</td></tr>
+              <tr><td><code>loadingAnimation</code></td><td><code>none</code>, <code>gentle-bob</code>, or <code>pulse</code>; arbitrary CSS is never accepted.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Namespaced extensions</h3>
+        <p><code>extensions</code> is optional on courses, sections, groups,
+          cards, and media. Keys use a reverse-domain namespace such as
+          <code>org.example.generator/template</code>. Values stay inert:
+          keep club preserves them but does not execute or interpret them.</p>
+        <p>The downloadable schema is the exhaustive machine-readable source:
+          <a href="schema/course-v2.schema.json"><code>course-v2.schema.json</code></a>.</p>
+      </section>
+
+      <section id="identity">
+        <h2>Stable IDs protect progress</h2>
+        <p><code>courseId</code> identifies the course.
+          <code>cardId</code> identifies one review history within it. Treat
+          both as permanent opaque keys:</p>
+        <ul>
+          <li>do not derive them from a title or the current wording;</li>
+          <li>do not renumber them when cards are reordered;</li>
+          <li>keep a card’s ID when correcting that same card;</li>
+          <li>use a new ID when replacing it with a genuinely different review
+            prompt; never recycle an old ID for another fact.</li>
+        </ul>
+        <p>The public format is an adapter/input contract. Existing compact
+          courses, shipped card IDs, <code>munin/…</code> learner storage keys,
+          cache names, and the installed PWA identity remain compatible behind
+          it. They are not creator-facing field names and must not be renamed.</p>
+      </section>
+
+      <section id="tooling">
+        <h2>Your editor is not part of the contract</h2>
+        <p>Write YAML by hand, export it from a spreadsheet, generate it from
+          a database, or build your own course studio. keep club owns the
+          boundary—not your workflow.</p>
+        <ul>
+          <li>Canonical authoring: one UTF-8 YAML 1.2 document.</li>
+          <li>JSON is accepted as YAML-compatible plain data, but YAML is the
+            documented human-authored form.</li>
+          <li>Strict known fields catch misspellings instead of discarding them.</li>
+          <li>Custom tool metadata belongs under a reverse-domain
+            <code>extensions</code> key such as
+            <code>org.example.generator</code>.</li>
+          <li>Scheduling, streaks, due dates, and learner history never belong
+            in a course artifact.</li>
+        </ul>
+      </section>
+
+      <section id="evolution">
+        <h2>Evolution without surprise</h2>
+        <p><code>schemaVersion</code> is an integer major. Version 2 has an
+          immutable schema URL. Additive clarification may be documented only
+          when it cannot change the meaning of a file already accepted; new
+          fields or changed meaning require a new major.</p>
+        <p>Tools may add unknown data only below namespaced
+          <code>extensions</code>. keep club keeps it inert and never treats an
+          extension as scheduling state or executable content.</p>
+        <div class="actions">
+          <a class="button" href="schema/course-v2.schema.json" download>Download schema v2</a>
+          <a class="button secondary" href="reference/errors/">Browse diagnostics</a>
+          <a class="button secondary"
+            href="https://github.com/0xkkonrad/keepclub/tree/main/schema">Read the source contract</a>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>keep club is open source and made by
+          <a href="https://kkonrad.com/" rel="author">kkonrad</a>.
+          Course format 2 is published from the same source and deployment as
+          the app, so the docs and schema cannot quietly become a second product.</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

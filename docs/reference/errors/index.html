@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Stable diagnostic codes for keep club course format 2.">
+  <link rel="canonical" href="https://keepclub.app/docs/reference/errors/">
+  <link rel="icon" href="../../../icon-192.png">
+  <link rel="stylesheet" href="../../docs.css">
+  <title>Diagnostic codes · keep club course docs</title>
+  <style>
+    .diagnostics { margin: 0; }
+    .diagnostics > div { padding: 1rem 0; border-bottom: 1px solid var(--line); scroll-margin-top: 6rem; }
+    .diagnostics dt { font-weight: 600; }
+    .diagnostics dd { max-width: 76ch; margin: .35rem 0 0; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to the reference</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../../" aria-label="keep club course docs home">
+        <img src="../../tower.svg" alt="" width="36" height="36">
+        <span>keep club <small>course docs</small></span>
+      </a>
+      <nav class="top-links" aria-label="External">
+        <a href="https://github.com/0xkkonrad/keepclub">source</a>
+        <a href="https://keepclub.app/">open the app ↗</a>
+      </nav>
+    </div>
+  </header>
+  <div class="layout">
+    <nav class="side" aria-label="Diagnostic groups">
+      <strong>Course format 2</strong>
+      <a href="../../">Creator guide</a>
+      <a href="../../schema/course-v2.schema.json">JSON Schema ↧</a>
+      <strong>On this page</strong>
+      <a href="#parse-and-shape-errors">Parse and shape errors</a>
+        <a href="#semantic-and-asset-errors">Semantic and asset errors</a>
+        <a href="#quality-warnings">Quality warnings</a>
+        <a href="#legacy-compatibility">Legacy compatibility</a>
+    </nav>
+    <main id="content">
+      <p class="eyebrow">Reference · stable API</p>
+      <h1>Diagnostic codes</h1>
+      <p class="lede">Codes do not change meaning. Wording may become clearer,
+        but tools can depend on the code, severity, data path, correction, and
+        documentation URL.</p>
+      <div class="callout">
+        <p><strong>Errors are atomic.</strong> They block the course rather than
+          dropping part of it. Quality warnings may proceed through an explicit
+          preview.</p>
+      </div>
+
+      <section id="parse-and-shape-errors">
+        <h2>Parse and shape errors</h2>
+        <dl class="diagnostics">
+          <div id="document-invalid-yaml">
+            <dt><code>document.invalid_yaml</code></dt>
+            <dd>YAML 1.2 cannot be parsed; fix the syntax at the reported location.</dd>
+          </div>
+          <div id="document-unsupported-file-type">
+            <dt><code>document.unsupported_file_type</code></dt>
+            <dd>The selected file is not <code>.keep.yml</code>, <code>.keep</code>, or an existing supported import format; choose a canonical course artifact.</dd>
+          </div>
+          <div id="document-multiple-documents">
+            <dt><code>document.multiple_documents</code></dt>
+            <dd>More than one YAML document was supplied; keep exactly one.</dd>
+          </div>
+          <div id="document-duplicate-key">
+            <dt><code>document.duplicate_key</code></dt>
+            <dd>A mapping repeats a key; remove one rather than relying on parser precedence.</dd>
+          </div>
+          <div id="document-disallowed-tag">
+            <dt><code>document.disallowed_tag</code></dt>
+            <dd>A custom YAML tag was used; use plain YAML data.</dd>
+          </div>
+          <div id="document-disallowed-anchor">
+            <dt><code>document.disallowed_anchor</code></dt>
+            <dd>An anchor, alias, or merge key was used; write the value explicitly.</dd>
+          </div>
+          <div id="document-unsupported-yaml-version">
+            <dt><code>document.unsupported_yaml_version</code></dt>
+            <dd>A <code>%YAML</code> directive selects a version other than 1.2; remove it or select 1.2.</dd>
+          </div>
+          <div id="document-non-plain-value">
+            <dt><code>document.non_plain_value</code></dt>
+            <dd>A mapping key or numeric value cannot be represented safely as plain course data; use string keys and finite, safe numbers.</dd>
+          </div>
+          <div id="document-too-many-errors">
+            <dt><code>document.too_many_errors</code></dt>
+            <dd>More than 100 parser/safety errors exist; fix the reported set, then validate again.</dd>
+          </div>
+          <div id="limit-input-bytes">
+            <dt><code>limit.input_bytes</code></dt>
+            <dd>The UTF-8 manifest exceeds 5 MiB; split or reduce the course.</dd>
+          </div>
+          <div id="limit-nesting">
+            <dt><code>limit.nesting</code></dt>
+            <dd>YAML nesting exceeds 24 levels; flatten the data.</dd>
+          </div>
+          <div id="limit-scalar-length">
+            <dt><code>limit.scalar_length</code></dt>
+            <dd>A scalar exceeds 1 MiB; split or reduce the content.</dd>
+          </div>
+          <div id="limit-collection-items">
+            <dt><code>limit.collection_items</code></dt>
+            <dd>A list or mapping exceeds 50,000 entries; split or reduce it.</dd>
+          </div>
+          <div id="limit-node-count">
+            <dt><code>limit.node_count</code></dt>
+            <dd>The document exceeds 500,000 syntax nodes; split or simplify it.</dd>
+          </div>
+          <div id="markdown-too-long">
+            <dt><code>markdown.too_long</code></dt>
+            <dd>One Markdown field exceeds 256 KiB; split or shorten it.</dd>
+          </div>
+          <div id="markdown-too-deep">
+            <dt><code>markdown.too_deep</code></dt>
+            <dd>Markdown nesting exceeds 64 levels; flatten nested lists or formatting.</dd>
+          </div>
+          <div id="markdown-too-complex">
+            <dt><code>markdown.too_complex</code></dt>
+            <dd>One Markdown field exceeds 100,000 syntax nodes; split or simplify it.</dd>
+          </div>
+          <div id="markdown-unsupported-construct">
+            <dt><code>markdown.unsupported_construct</code></dt>
+            <dd>Markdown outside the format-2 subset was used; replace it with a supported construct.</dd>
+          </div>
+          <div id="markdown-unsafe-link">
+            <dt><code>markdown.unsafe_link</code></dt>
+            <dd>A link is not HTTPS or mailto; correct it or leave its label as plain text.</dd>
+          </div>
+          <div id="markdown-empty">
+            <dt><code>markdown.empty</code></dt>
+            <dd>A caller-required Markdown field has no visible content; add content or omit the optional field.</dd>
+          </div>
+          <div id="markdown-too-many-errors">
+            <dt><code>markdown.too_many_errors</code></dt>
+            <dd>More than 100 Markdown errors exist; fix the reported set, then validate again.</dd>
+          </div>
+          <div id="course-not-object">
+            <dt><code>course.not_object</code></dt>
+            <dd>The root is not a mapping; make the document a course mapping.</dd>
+          </div>
+          <div id="course-unsupported-schema-version">
+            <dt><code>course.unsupported_schema_version</code></dt>
+            <dd><code>schemaVersion</code> is absent or not <code>2</code>; use the documented major.</dd>
+          </div>
+          <div id="course-missing-id">
+            <dt><code>course.missing_id</code></dt>
+            <dd><code>courseId</code> is absent; add a stable creator-owned ID.</dd>
+          </div>
+          <div id="course-invalid-id">
+            <dt><code>course.invalid_id</code></dt>
+            <dd>An ID is blank or violates the lowercase stable-ID grammar; correct it, never auto-generate it during import.</dd>
+          </div>
+          <div id="course-cards-required">
+            <dt><code>course.cards_required</code></dt>
+            <dd><code>cards</code> is absent, not a list, or empty; provide at least one card.</dd>
+          </div>
+          <div id="card-missing-id">
+            <dt><code>card.missing_id</code></dt>
+            <dd>A card lacks <code>cardId</code>; assign a stable ID before import.</dd>
+          </div>
+          <div id="field-unknown">
+            <dt><code>field.unknown</code></dt>
+            <dd>An object has an unknown field; use a documented field or namespaced extension.</dd>
+          </div>
+          <div id="field-invalid-type">
+            <dt><code>field.invalid_type</code></dt>
+            <dd>A value has the wrong type; use the type shown in the reference.</dd>
+          </div>
+          <div id="field-empty">
+            <dt><code>field.empty</code></dt>
+            <dd>An optional value that must be meaningful is blank/empty; omit it or provide content.</dd>
+          </div>
+          <div id="extension-invalid-namespace">
+            <dt><code>extension.invalid_namespace</code></dt>
+            <dd>An extension key is not reverse-domain namespaced; use e.g. <code>org.example.tool</code>.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="semantic-and-asset-errors">
+        <h2>Semantic and asset errors</h2>
+        <dl class="diagnostics">
+          <div id="card-front-empty">
+            <dt><code>card.front_empty</code></dt>
+            <dd>Neither sanitized front text nor valid front media renders; add one.</dd>
+          </div>
+          <div id="card-duplicate-id">
+            <dt><code>card.duplicate_id</code></dt>
+            <dd>Two cards share a <code>cardId</code>; give each review card stable unique identity.</dd>
+          </div>
+          <div id="section-duplicate-id">
+            <dt><code>section.duplicate_id</code></dt>
+            <dd>Two sections share a <code>sectionId</code>; rename one and update references.</dd>
+          </div>
+          <div id="section-unknown">
+            <dt><code>section.unknown</code></dt>
+            <dd>A card names an undeclared section; declare it or correct <code>sectionId</code>.</dd>
+          </div>
+          <div id="section-ambiguous-default">
+            <dt><code>section.ambiguous_default</code></dt>
+            <dd>A card omits <code>sectionId</code> while multiple sections exist; name its section.</dd>
+          </div>
+          <div id="section-empty">
+            <dt><code>section.empty</code></dt>
+            <dd>A declared section contains no cards; remove it or add cards.</dd>
+          </div>
+          <div id="group-duplicate-id">
+            <dt><code>group.duplicate_id</code></dt>
+            <dd>Two groups share a <code>groupId</code>; rename one.</dd>
+          </div>
+          <div id="group-unknown-section">
+            <dt><code>group.unknown_section</code></dt>
+            <dd>A group names an undeclared section; correct <code>sectionIds</code>.</dd>
+          </div>
+          <div id="group-duplicate-section">
+            <dt><code>group.duplicate_section</code></dt>
+            <dd>A section occurs twice in one or more groups; keep one membership.</dd>
+          </div>
+          <div id="group-ungrouped-section">
+            <dt><code>group.ungrouped_section</code></dt>
+            <dd>Groups exist but omit a declared section; place every section exactly once.</dd>
+          </div>
+          <div id="media-invalid-path">
+            <dt><code>media.invalid_path</code></dt>
+            <dd>An asset path is unsafe or ambiguous; use one normalized relative path.</dd>
+          </div>
+          <div id="media-missing">
+            <dt><code>media.missing</code></dt>
+            <dd>A declared asset is absent; add it or remove the reference.</dd>
+          </div>
+          <div id="media-type-mismatch">
+            <dt><code>media.type_mismatch</code></dt>
+            <dd>Declared type, optional MIME, extension, and bytes disagree; correct the declaration/file.</dd>
+          </div>
+          <div id="media-unsupported">
+            <dt><code>media.unsupported</code></dt>
+            <dd>The media container is not in the safely accepted package set; transcode it.</dd>
+          </div>
+          <div id="media-too-many">
+            <dt><code>media.too_many</code></dt>
+            <dd>Per-card or course media count exceeds the documented limit; split/reduce it.</dd>
+          </div>
+          <div id="media-too-large">
+            <dt><code>media.too_large</code></dt>
+            <dd>A file exceeds its type limit; compress, transcode, or split it.</dd>
+          </div>
+          <div id="package-root-manifest-missing">
+            <dt><code>package.root_manifest_missing</code></dt>
+            <dd>A <code>.keep</code> archive has no root <code>course.keep.yml</code>; add exactly that file.</dd>
+          </div>
+          <div id="package-duplicate-path">
+            <dt><code>package.duplicate_path</code></dt>
+            <dd>Two entries normalize to the same path; rename one.</dd>
+          </div>
+          <div id="package-unsafe-path">
+            <dt><code>package.unsafe_path</code></dt>
+            <dd>An entry is absolute, traverses, uses backslashes/control characters, or is otherwise unsafe; rebuild the archive.</dd>
+          </div>
+          <div id="package-too-many-files">
+            <dt><code>package.too_many_files</code></dt>
+            <dd>The archive exceeds 2,500 files; reduce it.</dd>
+          </div>
+          <div id="package-too-large">
+            <dt><code>package.too_large</code></dt>
+            <dd>Compressed or expanded archive limits are exceeded; reduce it.</dd>
+          </div>
+          <div id="package-expansion-ratio">
+            <dt><code>package.expansion_ratio</code></dt>
+            <dd>A file/archive expands over 100:1; rebuild without dangerous compression behavior.</dd>
+          </div>
+          <div id="package-unsupported-feature">
+            <dt><code>package.unsupported_feature</code></dt>
+            <dd>A member is encrypted or uses an unsupported ZIP method; rebuild with unencrypted stored/deflate entries.</dd>
+          </div>
+          <div id="publication-license-required">
+            <dt><code>publication.license_required</code></dt>
+            <dd>Publication was requested without a license; declare one.</dd>
+          </div>
+          <div id="publication-image-alt-required">
+            <dt><code>publication.image_alt_required</code></dt>
+            <dd>A published non-decorative image lacks useful alternative text; add it.</dd>
+          </div>
+          <div id="publication-image-dimensions-required">
+            <dt><code>publication.image_dimensions_required</code></dt>
+            <dd>A published image lacks known dimensions; add or derive them.</dd>
+          </div>
+          <div id="publication-video-text-alternative-required">
+            <dt><code>publication.video_text_alternative_required</code></dt>
+            <dd>Published video lacks captions and transcript; add one.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="quality-warnings">
+        <h2>Quality warnings</h2>
+        <dl class="diagnostics">
+          <div id="field-empty-back">
+            <dt><code>field.empty_back</code></dt>
+            <dd><code>back</code> is blank and will normalize to absent; omit it to state front-only intent.</dd>
+          </div>
+          <div id="field-empty-optional">
+            <dt><code>field.empty_optional</code></dt>
+            <dd>An allowed empty optional collection/value will normalize away; omit it.</dd>
+          </div>
+          <div id="course-missing-title">
+            <dt><code>course.missing_title</code></dt>
+            <dd>A title will be derived from <code>courseId</code>; add a deliberate display title if publishing.</dd>
+          </div>
+          <div id="course-missing-description">
+            <dt><code>course.missing_description</code></dt>
+            <dd>The course has no description; consider adding one for discovery.</dd>
+          </div>
+          <div id="card-long-side">
+            <dt><code>card.long_side</code></dt>
+            <dd>A side is unusually long though within the hard limit; split or tighten it.</dd>
+          </div>
+          <div id="card-front-only-answer-cue">
+            <dt><code>card.front_only_answer_cue</code></dt>
+            <dd>A front-only prompt implies an answer will be revealed; reword it or add a back.</dd>
+          </div>
+          <div id="card-duplicate-looking-content">
+            <dt><code>card.duplicate_looking_content</code></dt>
+            <dd>Two cards appear equivalent after text normalization; confirm both are intentional.</dd>
+          </div>
+          <div id="card-duplicate-tag">
+            <dt><code>card.duplicate_tag</code></dt>
+            <dd>Tags duplicate after Unicode normalization/case folding; the first spelling wins.</dd>
+          </div>
+          <div id="media-alt-missing">
+            <dt><code>media.alt_missing</code></dt>
+            <dd>A local non-decorative image has no alternative text; add it before sharing.</dd>
+          </div>
+          <div id="media-alt-weak">
+            <dt><code>media.alt_weak</code></dt>
+            <dd>Alternative text is filename-like or uninformative; describe the useful content.</dd>
+          </div>
+          <div id="media-transcript-missing">
+            <dt><code>media.transcript_missing</code></dt>
+            <dd>Local audio/video has no transcript; add one for accessibility.</dd>
+          </div>
+          <div id="media-large-file">
+            <dt><code>media.large_file</code></dt>
+            <dd>Media is valid but large enough to affect install/offline quota; optimize it.</dd>
+          </div>
+          <div id="media-unreferenced-asset">
+            <dt><code>media.unreferenced_asset</code></dt>
+            <dd>A package file is not declared by the course; remove it or declare it.</dd>
+          </div>
+          <div id="metadata-missing-attribution">
+            <dt><code>metadata.missing_attribution</code></dt>
+            <dd>Local content has no author/source attribution; add it before sharing.</dd>
+          </div>
+          <div id="theme-low-contrast">
+            <dt><code>theme.low_contrast</code></dt>
+            <dd>A custom paper/ink or accent/ink pair has weak contrast; choose a more legible pair.</dd>
+          </div>
+        </dl>
+      </section>
+      <section id="legacy-compatibility">
+        <h2>Legacy compatibility</h2>
+        <div class="callout warning">
+          <p><strong>This is not a public authoring format.</strong> Legacy
+            diagnostics come from the internal reader that keeps bundled
+            courses and existing Anki imports working. Do not edit compact
+            legacy fields to make a course.</p>
+        </div>
+        <p>Use the diagnostic’s own code, path, message, and correction as the
+          specific account of what failed. For an Anki import, export a fresh
+          <code>.apkg</code> or <code>.colpkg</code> from a current Anki version
+          and try again. For a bundled course or a deck that used to open,
+          reload once; if it still fails, report the code and path because the
+          shipped/cache copy or stored import may be damaged.</p>
+        <p>Course creators should use the documented
+          <a href="../../#quick-start">format-2 <code>.keep.yml</code> and
+          <code>.keep</code> contract</a>.</p>
+      </section>
+      <footer class="footer">
+        <p>The format-2 tables are generated from
+          <code>schema/diagnostics.md</code> in the keep club source tree.
+          Edit the contract, then rebuild this reference.</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
