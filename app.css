@@ -1202,6 +1202,12 @@ mark {
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-row .ghost { flex: 1 1 150px; }
 
+.about { color: var(--muted); font-size: .78rem; line-height: 1.65; }
+.about p { margin: 0; }
+.about p + p { margin-top: 8px; }
+.about a { color: var(--accent); text-underline-offset: 3px; }
+.about .about-build { margin-top: 14px; }
+
 /* The sync key is meant to be read off one screen and typed into another, so it
    is set large, spaced, and in the mono face the whole app already loads. */
 .sync-key {
