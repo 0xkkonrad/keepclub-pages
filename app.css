@@ -71,10 +71,32 @@
   --sh: 4px 4px 0 var(--stroke);
   --sh-sm: 3px 3px 0 var(--stroke);
   --fig-blu: #1f5fa8;             /* water and wind, the one colour the app lacks */
+  /* The dimming layer behind a panel. Its own variable rather than a mix of
+     --stroke, which is the ink colour and is nearly white in the dark theme:
+     derived from that, the backdrop came out a 55% white wash, brighter than
+     the panel it was meant to be sitting behind. A scrim is darkness in both
+     themes — the only thing that changes between them is how much. */
+  --scrim: rgba(18, 18, 20, .55);
   --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --hand: "Architects Daughter", "Bradley Hand", cursive;
+  /* The one number the whole type scale is measured from. Every size in this
+     file is a rem, so the root's own size is the only place text size can be
+     set from — and 15px is what the app was drawn at, so it is the default
+     here and stays the default for anyone who never touches the setting. */
+  --font-px: 15px;
   color-scheme: light;
 }
+
+/* Text size, four steps, written by applyFontSize() in app.js. Steps rather
+   than a slider: the point is legibility, not typography, and a person picking
+   between four names cannot land on a size that breaks the layout. Declared as
+   attribute overrides for the same reason the theme is — the stylesheet is
+   parsed before any script runs, so the sizes have to already be here for the
+   attribute to mean anything on the first frame. */
+:root[data-font="small"] { --font-px: 13px; }
+:root[data-font="default"] { --font-px: 15px; }
+:root[data-font="large"] { --font-px: 17px; }
+:root[data-font="xlarge"] { --font-px: 19px; }
 
 /* There is no prefers-color-scheme block, on purpose. Munin's default is LIGHT,
  * not the device's setting (28 July 2026): the app is drawn — paper, ink and a
@@ -92,6 +114,7 @@
   --text: #121214; --muted: #55555e; --accent: #0e3f39; --accent-ink: #fffdf7;
   --g1: #b8371f; --g2: #8f5a10; --g3: #276e46; --g4: #0e3f39; --warn: #a4581a;
   --fig-blu: #1f5fa8;
+  --scrim: rgba(18, 18, 20, .55);
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -100,6 +123,10 @@
   --text: #f1efe8; --muted: #a6a7b2; --accent: #35917f; --accent-ink: #141519;
   --g1: #ff8a75; --g2: #f0b64a; --g3: #5ed49a; --g4: #35917f; --warn: #f0b64a;
   --fig-blu: #6fb2ff;
+  /* Darker and more opaque than the light theme's: the page behind it is
+     already dark, so it takes more to read as "that is not the thing you are
+     using now" and there is no bright paper left for it to soften. */
+  --scrim: rgba(6, 6, 9, .72);
   color-scheme: dark;
 }
 
@@ -114,7 +141,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.55 var(--mono);
+  font: var(--font-px)/1.55 var(--mono);
   font-feature-settings: "kern" 1;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
@@ -1261,6 +1288,20 @@ mark {
 }
 .setting input[type=number] { width: 80px; }
 .setting input[type=date] { padding: 0 10px; }
+/* No width: the control has to hold "Extra large" at every size it can pick,
+   including the largest one, and a fixed width would clip the word that names
+   the step you are standing on. The chevron is the section filter's, drawn in
+   --text so it inverts with the paper. */
+.setting select {
+  min-height: 44px; flex: none; appearance: none;
+  padding: 0 32px 0 12px;
+  background-color: var(--surface);
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%),
+                    linear-gradient(135deg, var(--text) 50%, transparent 50%);
+  background-position: calc(100% - 17px) center, calc(100% - 12px) center;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
 .setting.row { justify-content: flex-start; gap: 12px; }
 .setting.row input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
 .setting small { display: block; color: var(--muted); font-size: .74rem; margin-top: 3px; line-height: 1.5; }
@@ -1295,6 +1336,78 @@ mark {
   font: inherit; font-size: 1rem; letter-spacing: .08em; text-align: center;
 }
 #sync-join[hidden] { display: none; }
+
+/* ── notes ───────────────────────────────────────────────────────── */
+
+/* Somebody's own words about the deck, in the app's own furniture: paper, 2px
+   ink, the hard shadow. Nothing here names a colour — every value is one of the
+   two theme sets' variables, so the panel is drawn in whichever one is showing
+   and there is no second design to keep in step. */
+
+/* The row on Home that opens it. A ghost button's shape, laid out like the
+   leech row: a name and a line saying what is behind it. */
+.notes-row {
+  width: 100%; text-align: left; margin-top: 20px;
+  display: grid; gap: 3px; min-height: var(--tap);
+  background: var(--surface); border: var(--bw) solid var(--stroke);
+  border-radius: var(--r); box-shadow: var(--sh-sm); padding: 12px 14px;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.notes-row:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
+.notes-row span { font-weight: 500; font-size: .9rem; text-transform: lowercase; }
+.notes-row small { color: var(--muted); font-size: .76rem; }
+
+/* Above the `courses` pill (80) and below the lightbox (90); the two are never
+   open at once, and the pill is inert while this is up anyway. The toast (70)
+   is deliberately left underneath — a panel you are typing into answers inside
+   itself, and .notes-say is where every message it has goes. */
+.notes {
+  position: fixed; inset: 0; z-index: 82;
+  background: var(--scrim);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.notes[hidden] { display: none; }
+/* Anchored to the bottom edge on a phone, where the keyboard comes up under it
+   and the thumb is: a centred card would spend the whole session behind the
+   keyboard. On a wide screen the max-width is what stops it being a banner. */
+.notes-card {
+  width: min(560px, 100%); max-height: 92vh; overflow-y: auto;
+  background: var(--bg); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
+}
+.notes-bar { display: flex; align-items: center; gap: 8px; }
+.notes-bar h2 {
+  flex: 1; margin: 0; font-size: 1.05rem; font-weight: 500;
+  letter-spacing: -.02em; text-transform: lowercase;
+}
+.notes-write { margin: 14px 0 0; }
+#notes-text {
+  display: block; width: 100%; padding: 12px 14px; resize: vertical;
+  background: var(--surface); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  font: inherit; font-size: .92rem; line-height: 1.6;
+}
+.notes-acts { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.notes-acts .primary { flex: 1; }
+/* A fixed floor, so a message appearing does not shove the list down the page
+   under the finger that is reaching for it. */
+.notes-say { margin: 10px 0 0; min-height: 1.3em; font-size: .78rem; color: var(--muted); }
+.notes-list { list-style: none; margin: 14px 0 0; padding: 0; border-top: 2px dotted var(--line); }
+.notes-list:empty { margin: 0; border-top: 0; }
+.notes-list li { border-bottom: 2px dotted var(--line); padding: 12px 0; }
+/* pre-wrap, because a note is exactly what was typed and line breaks are the
+   only shape plain text has; anywhere, because a pasted URL is one long word
+   and nothing else on this screen may be pushed sideways by it. */
+.note-text {
+  margin: 0; font-size: .9rem; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.note-foot { display: flex; align-items: center; gap: 14px; margin-top: 2px; }
+.note-when { flex: 1; min-width: 0; font-size: .72rem; color: var(--muted); }
+.note-foot .link-btn { padding: 6px 2px; min-height: 40px; flex: none; }
+.notes-empty { margin: 16px 0 0; font-size: .8rem; line-height: 1.65; color: var(--muted); }
 
 /* ── lightbox ────────────────────────────────────────────────────── */
 

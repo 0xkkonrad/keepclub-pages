@@ -99,6 +99,17 @@
            twenty-four sections the same way; the app has one shape or none. -->
       <div id="section-list"></div>
 
+      <!-- Your own words about this deck. Under the sections rather than above
+           them, because it is somewhere you go rather than something the app is
+           asking you for, and the deck is what you came here to study. The
+           second line is filled by renderNotesRow() — how many there are is a
+           fact about this deck, and printing "3 notes" over a deck with none is
+           the same mistake the offline line used to make. -->
+      <button class="notes-row" id="notes-open" type="button">
+        <span>Notes</span>
+        <small id="notes-row-say">Anything about this deck the cards do not say</small>
+      </button>
+
       <!-- What this deck is and is not, in the words of whoever built it:
            course.json's `notice`. An almanac and an up-to-date chart are Day
            Skipper's caveat, not Munin's, and printing them under a deck of
@@ -307,6 +318,20 @@
           <input type="checkbox" id="set-shuffle">
           <span>Mix sections together <small>Stops you recognising an answer from the cards around it</small></span>
         </label>
+        <!-- Last, and the only setting here that is not about scheduling: it
+             changes what the app looks like rather than what it shows you next.
+             The four steps are written out in the markup rather than built by
+             app.js, so the control is complete and readable before any script
+             has run — the same reason the notice above carries its default. -->
+        <label class="setting">
+          <span>Text size <small>Scales the whole app, not just the cards.</small></span>
+          <select id="set-font">
+            <option value="small">Small</option>
+            <option value="default">Default</option>
+            <option value="large">Large</option>
+            <option value="xlarge">Extra large</option>
+          </select>
+        </label>
       </div>
 
       <!-- Installing sits with the other things you set up, not on the study
@@ -403,6 +428,38 @@
     <div class="lb-fig" id="lb-fig" hidden></div>
   </div>
   <p class="lb-hint" id="lb-hint">Pinch or double-tap to zoom · drag to pan</p>
+</div>
+
+<!-- ─────────────────────────── NOTES ─────────────────────────── -->
+<!-- Outside #app, like the lightbox and for the same reason: opening it makes
+     #app inert, and a panel inside its own inert ancestor is a panel nobody can
+     type into. Plain text throughout — there is no toolbar here because there is
+     no formatting, and a note is stored exactly as it is shown. -->
+<div class="notes" id="notes" hidden role="dialog" aria-modal="true" aria-labelledby="notes-h">
+  <div class="notes-card">
+    <div class="notes-bar">
+      <h2 id="notes-h">Notes</h2>
+      <button class="icon-btn" id="notes-close" type="button" aria-label="Close notes">✕</button>
+    </div>
+    <form class="notes-write" id="notes-write">
+      <!-- maxlength matches app.js's NOTE_LEN. The sanitiser cuts to the same
+           length whatever the browser did, so a paste that beats the attribute
+           is still a note and not a truncation surprise on the next load. -->
+      <textarea id="notes-text" rows="3" maxlength="2000" enterkeyhint="done"
+                aria-label="New note"
+                placeholder="Plain text. Whatever you want to keep about this deck."></textarea>
+      <div class="notes-acts">
+        <button class="primary" id="notes-save" type="submit">Add note</button>
+        <button class="link-btn" id="notes-cancel" type="button" hidden>Cancel</button>
+      </div>
+    </form>
+    <!-- Everything this panel has to say, said inside it: it covers the toast,
+         and a message about the words you just typed belongs beside them. -->
+    <p class="notes-say" id="notes-say" role="status" aria-live="polite"></p>
+    <ul class="notes-list" id="notes-list"></ul>
+    <p class="notes-empty" id="notes-empty" hidden>Nothing yet. Notes belong to this
+      deck: they travel with your progress, and they are removed when the deck is.</p>
+  </div>
 </div>
 
 <!-- The loading screen. keep club's tower is the default scene and it is markup,

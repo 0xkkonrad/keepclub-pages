@@ -31,6 +31,26 @@ const LEECH_AT = 3;
 // How many cards a deliberate "study ahead" or "no cards due in this section"
 // session serves. Unbounded, it hands over the entire remaining deck.
 const AHEAD_BATCH = 20;
+// A note is a person's own words about the deck, so it is plain text, it is
+// theirs, and it is bounded. Both caps are enforced on the way in and again on
+// the way back out of storage: the sync blob a built-in course uploads is
+// bounded at the far end, and one deck's notes must not be what fills it — the
+// review history is in the same document and would go down with it.
+const NOTE_LEN = 2000;
+// Live notes one deck may hold. Past this the panel says so rather than
+// silently dropping the oldest, which is somebody's writing. Must match
+// sync.js's NOTE_LIVE: this is the number a person is told about while they
+// type, and the merge has to arrive at the same one when devices meet.
+const NOTE_MAX = 200;
+// Stored entries: live notes plus the emptied records that record a delete.
+// Must match sync.js's NOTE_SLOTS — the merge caps to the same number, and a
+// sanitiser with a lower cap would throw away what the merge just kept.
+const NOTE_SLOTS = 400;
+// Ids are written by newNoteId() and are hex. They are checked rather than
+// trusted because a note id is used as an object key, and `{}['__proto__'] = v`
+// sets a prototype instead of a property — a restored file or a synced blob is
+// exactly where a key like that would arrive from.
+const NOTE_ID = /^[a-z0-9]{1,64}$/;
 // Stamped into every exported file so restore can tell a real backup from any
 // other JSON someone happens to pick.
 const EXPORT_APP = 'munin/' + COURSE.id;
@@ -43,6 +63,13 @@ const EXAM_DEFAULT = (typeof COURSE.examDate === 'string' && /^\d{4}-\d{2}-\d{2}
 // so typing 2026 walks through 0002, 0020 and 0202 on its way. Anything outside
 // this window is someone mid-keystroke, not a date they mean.
 const EXAM_MIN_YEAR = 2020, EXAM_MAX_YEAR = 2040;
+// The text sizes offered, smallest first. Names rather than numbers: the pixels
+// belong to app.css (`:root[data-font=…]`), which is the only place that knows
+// what the type scale is measured in, and a number stored here would be a
+// second opinion about it. 'default' is 15px — the size the app was drawn at,
+// and what anyone who has never opened this setting is already reading.
+const FONT_SIZES = ['small', 'default', 'large', 'xlarge'];
+const FONT_DEFAULT = 'default';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -173,10 +200,15 @@ function freshState() {
     answers: 0,                  // every grade ever, for the hoard
     bestClean: 0,                // longest run without Again, across sessions
     ach: {},                     // achievement id -> unlocked timestamp
+    notes: {},                   // note id -> {at, ed, text}; empty text = deleted
     // Light by default rather than following the system: the paper, the ink
     // outlines and the hard shadows are the design, and the derived dark set is
     // the fallback for people who go looking for it.
-    settings: { newPerDay: 20, maxRev: 120, shuffle: true, examDate: EXAM_DEFAULT, examSkipped: false },
+    settings: {
+      newPerDay: 20, maxRev: 120, shuffle: true,
+      examDate: EXAM_DEFAULT, examSkipped: false,
+      fontSize: FONT_DEFAULT,
+    },
   };
 }
 
@@ -186,6 +218,11 @@ const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 /** "1 day", not "1 days" — the app counts down to a date, so it hits 1 often. */
 const plural = (v, word) => `${n(v)} ${n(v) === 1 ? word : word + 's'}`;
+
+/* Live notes the sanitiser has dropped and nobody has been told about yet. The
+ * sanitiser runs before there is a screen to say it on — it is the first thing
+ * boot() does — so it counts, and the places that can speak ask. */
+let notesDropped = 0;
 
 /** Make any stored or imported blob safe to run on.
  *
@@ -212,6 +249,13 @@ function sanitise(raw) {
   s.settings.at = Math.round(num(s.settings.at, 0, 8.64e15, 0));
   s.settings.shuffle = !!s.settings.shuffle;
   s.settings.examSkipped = !!s.settings.examSkipped;
+  // Anything that is not one of the four steps is the default size, which also
+  // covers the case that matters most: every save written before this setting
+  // existed has no fontSize at all, and those people must go on reading the app
+  // at exactly the size they have always read it at. The value is written
+  // straight into an attribute selector, so it is checked against the list
+  // rather than merely coerced to a string.
+  if (!FONT_SIZES.includes(s.settings.fontSize)) s.settings.fontSize = FONT_DEFAULT;
   // The default exam date belongs to a fresh install only. A restored backup
   // that never had one must not silently inherit it — that would compress every
   // interval on someone else's deck the moment they imported it.
@@ -276,6 +320,52 @@ function sanitise(raw) {
     }
   }
   s.ach = ach;
+
+  // Notes are the one part of this document a person wrote themselves, which
+  // makes them the one part with no shape the app can predict. Everything here
+  // has a way of arriving: a restored backup written by an older build with no
+  // notes at all, a synced blob that spent time in a database, a file someone
+  // edited by hand. A note whose text is a number renders as "[object
+  // Object]" at best and throws at worst, and either way it does it on the
+  // screen that is meant to be showing what they wrote.
+  const notes = {};
+  if (isPlainObject(raw.notes)) {
+    const entries = [];
+    for (const [id, note] of Object.entries(raw.notes)) {
+      if (!NOTE_ID.test(id) || !isPlainObject(note)) continue;
+      // Tabs and newlines are text a person typed and are kept. The rest of the
+      // C0 range is not: it survives JSON, it is invisible in the panel, and it
+      // is the difference between what the list shows and what is stored.
+      const text = (typeof note.text === 'string' ? note.text : '')
+        .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+        .slice(0, NOTE_LEN);
+      const at = Math.round(num(note.at, 0, 8.64e15, 0));
+      // An edit stamp that is missing falls back to the written stamp rather
+      // than to zero: zero would lose every merge against a device that has
+      // the same note, including the copy this one is about to delete.
+      entries.push([id, { at, ed: Math.round(num(note.ed, 0, 8.64e15, at)), text }]);
+    }
+    // More entries than this build stores can only come from somewhere else.
+    // Delete markers go first, then the oldest — the same order the merge
+    // evicts in, so a round trip through Sync does not change what survives.
+    // Both ceilings are applied here for the same reason and in the same way as
+    // in sync.js's mergeNotes: the live one is the promise the panel makes while
+    // somebody types, and a document arriving from a file or a database is
+    // exactly where more than that can turn up.
+    entries.sort(noteEntryOrder);
+    let kept = 0, live = 0;
+    for (const [id, note] of entries) {
+      if (kept >= NOTE_SLOTS) break;
+      if (note.text) {
+        if (live >= NOTE_MAX) { notesDropped++; continue; }
+        live++;
+      }
+      notes[id] = note;
+      kept++;
+    }
+  }
+  s.notes = notes;
+
   if (typeof s.day !== 'string') s.day = dayKey(Date.now());
   if (typeof s.lastDay !== 'string' || !s.days[s.lastDay]) s.lastDay = null;
   return s;
@@ -324,9 +414,11 @@ function refuseForeignWrite() {
       for (const id of Object.keys(state.recs)) if (!byId.has(id)) delete state.recs[id];
       settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
       applyTheme();
+      applyFontSize();
       if (current === 'home') renderHome();
       if (current === 'stats') renderStats();
       if (current === 'browse') renderBrowse();
+      renderNotesIfOpen();
     }
   } catch (e) { /* retain the last readable in-memory state */ }
   toast('Another tab is studying this deck. Finish there before changing progress or settings.');
@@ -470,9 +562,11 @@ addEventListener('storage', (e) => {
   // This was another tab's write, not a fresh local settings decision.
   settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
   applyTheme();
+  applyFontSize();
   if (current === 'home') renderHome();
   if (current === 'stats') renderStats();
   if (current === 'browse') renderBrowse();
+  renderNotesIfOpen();
 });
 
 /* ─────────────────────────── dates ─────────────────────────── */
@@ -1945,7 +2039,283 @@ function renderHome() {
     }
     list.appendChild(ul);
   }
+  renderNotesRow();
   hydrateSectionArtwork(list);
+}
+
+/* ── notes ── */
+
+/* Your own words about this deck.
+ *
+ * Plain text and nothing else: no markup, no pictures, no links, no markdown.
+ * A note is stored as text and rendered as text, and those are the same fact —
+ * there is no formatting to strip on the way out because none was ever kept on
+ * the way in. That is the whole feature, and it is deliberately the whole
+ * feature: a deck of flashcards is not a place to have built a second editor.
+ *
+ * They live in this deck's own state document, alongside the review history,
+ * because that document is already the per-deck thing. It already survives a
+ * reload and the sanitiser, it already rides along in an exported backup, and
+ * it is already covered by the single-writer rule that stops two tabs
+ * overwriting each other's work. It also answers the question the feature
+ * would otherwise leave open: the shell deletes that document when a deck is
+ * removed (sweepOrphans in munin.js), so a deck's notes are removed with the
+ * deck they were about, and nothing survives it pointing at cards that are
+ * gone. Erasing progress is the one thing that does NOT take them — a note is
+ * not review history, and that button does not offer to destroy one.
+ */
+
+/** Delete markers last, then oldest last. Shared by the sanitiser and, in the
+ *  same shape, by sync.js: both cap the number of stored entries, and two caps
+ *  that evicted different records would make a sync flip the set back and
+ *  forth for ever. Total, including the id, so the order never depends on
+ *  which object the entries were read out of. */
+function noteEntryOrder(a, b) {
+  const liveA = a[1].text ? 0 : 1, liveB = b[1].text ? 0 : 1;
+  if (liveA !== liveB) return liveA - liveB;
+  if (n(a[1].ed) !== n(b[1].ed)) return n(b[1].ed) - n(a[1].ed);
+  return a[0] < b[0] ? -1 : 1;
+}
+
+/** Two sets of notes, kept together.
+ *
+ * Restoring a backup is the one place outside Sync where two of these meet, and
+ * it is the same meeting: two documents that each hold words somebody wrote,
+ * and deletes on both sides that must not be undone by the other side's copy.
+ * So it is settled by the same algebra, called rather than copied — a second
+ * implementation would be a second answer to the tombstone question, and only
+ * one of them could be right. */
+function mergedNotes(mine, theirs) {
+  if (globalThis.DSSync && DSSync.mergeNotes) return DSSync.mergeNotes(mine, theirs);
+  // With sync.js missing there is no pickNote to call, and a restore is not the
+  // moment to improvise one. Keep every record this device holds and take the
+  // ids only the file has: nothing anybody can currently read goes away, which
+  // is the whole reason this function exists.
+  return Object.assign({}, theirs, mine);
+}
+
+/** The notes there are, newest written first. */
+function liveNotes() {
+  return Object.entries(state.notes)
+    .filter(([, note]) => !!note.text)
+    // Written order, not edited order. Sorted by the edit stamp instead,
+    // correcting a typo in the oldest note threw it to the top of the list —
+    // the app re-arranging a page in front of someone who only fixed a word.
+    .sort((a, b) => n(b[1].at) - n(a[1].at) || (a[0] < b[0] ? 1 : -1))
+    .map(([id, note]) => Object.assign({ id }, note));
+}
+
+/** Hex, and short. See NOTE_ID: this value becomes an object key, and
+ *  crypto.randomUUID() is undefined outside a secure context — which includes
+ *  the plain-http origin the suites run against. */
+function newNoteId() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+let noteEditing = null;
+
+function noteSays(line) {
+  const el = $('#notes-say');
+  if (el) el.textContent = line || '';
+}
+
+/* Every note write goes through here.
+ *
+ * The review document is one JSON value, so a note is written under the same
+ * single-writer rule as a grade: save() hands back false when another tab holds
+ * the study lease, and by then refuseForeignWrite() has already re-read that
+ * tab's durable copy over this one. Re-drawing from `state` afterwards is not
+ * housekeeping, then — it is how the refused edit disappears from the screen
+ * again, rather than sitting there looking saved. */
+function commitNotes(say) {
+  const wrote = save();
+  renderNotes();
+  renderNotesRow();
+  // The toast for a refused write ranks below this panel, so the panel says it
+  // itself. A message about the thing you just typed belongs next to it anyway.
+  noteSays(wrote ? (say || '') : 'Another tab is studying this deck. Finish there before writing notes.');
+  return wrote;
+}
+
+/** Whatever a person typed, as far as it is a note at all. */
+function noteTextFrom(input) {
+  return String(input == null ? '' : input)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, NOTE_LEN);
+}
+
+function addNote(input) {
+  const text = noteTextFrom(input);
+  if (!text) return false;
+  if (liveNotes().length >= NOTE_MAX) {
+    noteSays(`This deck already holds ${NOTE_MAX} notes. Delete one to write another.`);
+    return false;
+  }
+  const now = Date.now();
+  state.notes[newNoteId()] = { at: now, ed: now, text };
+  return commitNotes('Note added.');
+}
+
+function editNote(id, input) {
+  const note = state.notes[id];
+  if (!note || !note.text) return false;
+  const text = noteTextFrom(input);
+  // Emptying a note is not a note. An empty record is what a delete looks like
+  // in storage (see sync.js), so an empty edit is offered as a delete rather
+  // than quietly performing one.
+  if (!text) {
+    noteSays('A note needs some words. Use Delete to take it away.');
+    return false;
+  }
+  if (text === note.text) return true;
+  note.text = text;
+  note.ed = Date.now();
+  return commitNotes('Note saved.');
+}
+
+function deleteNote(id) {
+  const note = state.notes[id];
+  if (!note || !note.text) return false;
+  // Emptied, not removed. The record is the evidence that the note was deleted
+  // here; drop it entirely and the next sync with a device that still has it
+  // hands it straight back.
+  note.text = '';
+  note.ed = Date.now();
+  return commitNotes('Note deleted.');
+}
+
+/** The row on Home that opens the panel, in this deck's numbers. */
+function renderNotesRow() {
+  const row = $('#notes-row-say');
+  if (!row) return;
+  const count = liveNotes().length;
+  row.textContent = count
+    ? `${count} note${count === 1 ? '' : 's'} on this deck`
+    : 'Anything about this deck the cards do not say';
+}
+
+function renderNotes() {
+  const list = $('#notes-list');
+  if (!list) return;
+  const notes = liveNotes();
+  $('#notes-empty').hidden = notes.length > 0;
+  // escapeHtml, not innerHTML with the raw string: this is the one text in the
+  // app that a person typed into it, so it is also the one text that is theirs
+  // to type "<img onerror=…>" into. Whitespace is preserved by .note-text's
+  // pre-wrap — the line breaks are the only shape plain text has.
+  list.innerHTML = notes.map((note) => `<li data-note="${escapeHtml(note.id)}">
+      <p class="note-text">${escapeHtml(note.text)}</p>
+      <div class="note-foot">
+        <span class="note-when">${escapeHtml(noteWhen(note))}</span>
+        <button class="link-btn" type="button" data-note-edit
+          aria-label="Edit this note">Edit</button>
+        <button class="link-btn" type="button" data-note-delete
+          aria-label="Delete this note">Delete</button>
+      </div>
+    </li>`).join('');
+  // `saveBtn`, not `save`: there is a save() in this file that writes the whole
+  // document, and a local const of that name inside a render function is a trap
+  // for whoever adds the next line to it.
+  const saveBtn = $('#notes-save');
+  const editing = noteEditing && state.notes[noteEditing] && state.notes[noteEditing].text;
+  if (!editing) noteEditing = null;
+  saveBtn.textContent = editing ? 'Save note' : 'Add note';
+  $('#notes-cancel').hidden = !editing;
+  $('#notes-text').setAttribute('aria-label', editing ? 'Edit note' : 'New note');
+}
+
+/** When it was written, and whether it has been changed since. */
+function noteWhen(note) {
+  const written = new Date(n(note.at)).toLocaleDateString(undefined,
+    { day: 'numeric', month: 'short', year: 'numeric' });
+  // A minute's slack: `ed` is stamped by the same clock a moment after `at`,
+  // and a note created and never touched again must not claim it was edited.
+  return n(note.ed) - n(note.at) > 60000 ? `${written} · edited` : written;
+}
+
+function startNoteEdit(id) {
+  const note = state.notes[id];
+  if (!note || !note.text) return;
+  noteEditing = id;
+  const box = $('#notes-text');
+  box.value = note.text;
+  renderNotes();
+  box.focus({ preventScroll: true });
+  // The caret at the end, not at the start: this is the note you already wrote,
+  // and what you came to do is add to it or fix the end of it.
+  box.setSelectionRange(box.value.length, box.value.length);
+  noteSays('Editing a note.');
+}
+
+function cancelNoteEdit() {
+  noteEditing = null;
+  $('#notes-text').value = '';
+  renderNotes();
+  noteSays('');
+}
+
+let notesOpener = null;
+
+function openNotes(opener) {
+  const panel = $('#notes');
+  if (!panel.hidden) return;
+  notesOpener = opener || null;
+  noteEditing = null;
+  $('#notes-text').value = '';
+  noteSays('');
+  renderNotes();
+  panel.hidden = false;
+  document.body.style.overflow = 'hidden';
+  // The same containment the lightbox uses, for the same reason: aria-modal
+  // says the rest of the page is not there, and only inert makes that true for
+  // the Tab key. The panel is a sibling of #app so it is not inerting itself.
+  setBackgroundInert(true);
+  $('#notes-text').focus({ preventScroll: true });
+  pushStop('notes');
+}
+
+function closeNotes(fromHistory) {
+  const panel = $('#notes');
+  if (panel.hidden) return;
+  panel.hidden = true;
+  document.body.style.overflow = '';
+  setBackgroundInert(false);
+  noteEditing = null;
+  $('#notes-text').value = '';
+  if (notesOpener && notesOpener.isConnected && notesOpener.focus) {
+    notesOpener.focus({ preventScroll: true });
+  }
+  notesOpener = null;
+  if (!fromHistory && stops[stops.length - 1] === 'notes') history.back();
+}
+
+/** Re-draw the panel when the state under it was replaced by another tab or by
+ *  a sync, rather than leaving a list of notes that are no longer there. */
+function renderNotesIfOpen() {
+  if (!$('#notes').hidden) renderNotes();
+}
+
+/* Say that words went, on the one occasion they can.
+ *
+ * Both places that hold this deck to NOTE_MAX live notes — the sanitiser here
+ * and the merge in sync.js — run where there is nothing to say it on: one
+ * before the app is drawn, the other several times inside a sync round. They
+ * count instead. This is the other half, and it is the whole point of counting:
+ * a note is the one thing in this document that nothing else can reproduce, so
+ * losing one silently is the failure, not the drop itself. Sticky, because the
+ * sentence is the only record of it there will ever be; read once and cleared,
+ * so a second screen does not repeat a loss that already happened. */
+function sayIfNotesDropped() {
+  const merged = (globalThis.DSSync && DSSync.takeNoteDrops)
+    ? DSSync.takeNoteDrops() : 0;
+  const dropped = notesDropped + merged;
+  notesDropped = 0;
+  if (!dropped) return;
+  toast(`This deck keeps ${NOTE_MAX} notes at most, so ${plural(dropped, 'note')} `
+    + `— the ones untouched for longest — could not be kept.`, true);
 }
 
 /* ── study ── */
@@ -3062,9 +3432,19 @@ function renderBackupState() {
     return;
   }
   const withHistory = Object.keys(state.recs).length;
-  el.textContent = withHistory
-    ? `A backup right now would hold ${withHistory} of ${DECK.cards.length} cards, `
-      + `${state.streak} day${state.streak === 1 ? '' : 's'} of streak and your settings.`
+  // The notes are in the file whether or not this line used to mention them,
+  // and a deck someone has written about but not yet studied had a backup worth
+  // taking while this said there was nothing to take. What the export holds is
+  // the whole of what this sentence is for.
+  const notes = liveNotes().length;
+  const alsoNotes = notes ? `your ${plural(notes, 'note')} and ` : '';
+  if (withHistory) {
+    el.textContent = `A backup right now would hold ${withHistory} of ${DECK.cards.length} cards, `
+      + `${state.streak} day${state.streak === 1 ? '' : 's'} of streak, ${alsoNotes}your settings.`;
+    return;
+  }
+  el.textContent = notes
+    ? `No cards studied yet — a backup right now would hold ${plural(notes, 'note')} and your settings.`
     : 'Nothing to back up yet — study some cards first.';
 }
 
@@ -3097,9 +3477,11 @@ function adoptSynced(merged) {
   rollDay();
   writeNow();
   applyTheme();
+  applyFontSize();
   if (current === 'home') renderHome();
   if (current === 'stats') renderStats();
   if (current === 'browse') renderBrowse();
+  renderNotesIfOpen();
 }
 
 let syncBusy = false;
@@ -3116,7 +3498,13 @@ function runSync(loud) {
   // A function, not a value: a queued sync must read the state as it is when
   // its turn comes, and adoptSynced replaces the object wholesale.
   return DSSync.sync(() => state)
-    .then((merged) => { if (loud && merged !== undefined) toast('Synced.'); })
+    .then((merged) => {
+      if (loud && merged !== undefined) toast('Synced.');
+      // After the "Synced." line, not before it: a round trip that had to drop
+      // somebody's writing is not a successful sync with a footnote, and the
+      // sentence about it is the one that has to be left on the screen.
+      sayIfNotesDropped();
+    })
     .catch((e) => { if (loud) toast(`Could not sync: ${e.message || 'no connection'}.`); });
 }
 
@@ -3290,6 +3678,7 @@ function renderStats() {
   $('#set-new').value = state.settings.newPerDay;
   $('#set-max').value = state.settings.maxRev;
   $('#set-shuffle').checked = state.settings.shuffle;
+  $('#set-font').value = state.settings.fontSize;
   $('#set-exam').value = state.settings.examDate || '';
   const d = daysToExam();
   $('#exam-hint').textContent = d === null
@@ -3423,6 +3812,7 @@ addEventListener('popstate', () => {
   if (document.querySelector('.imp, .shelf.on[role="dialog"]')) return;
   const top = stops.pop();
   if (top === 'lightbox') return closeLightbox(true);
+  if (top === 'notes') return closeNotes(true);
   if (top === 'study') return leaveStudy(true);
   // A tab is one press above the course's home screen, however many tabs you
   // walked through to get to this one.
@@ -3432,6 +3822,7 @@ addEventListener('popstate', () => {
   // whatever is actually open rather than doing nothing, which reads as a Back
   // press that the app swallowed.
   if (!$('#lightbox').hidden) return closeLightbox(true);
+  if (!$('#notes').hidden) return closeNotes(true);
   if (current === 'study' || current === 'done') return leaveStudy(true);
   // Nothing of ours is open, so this was one of those leftovers. Step past it —
   // and past any others under it, which `history.state` names — so that one
@@ -3689,6 +4080,23 @@ function applyTheme() {
   $('#theme-btn').title = `Colour theme: ${MuninTheme.showing()}`;
 }
 
+/* Text size, unlike the theme, IS the course's — it rides in the review
+ * document so Sync carries it to your other device with the rest of the block.
+ * The shelf paints before any of that is read and stays at the default; the
+ * attribute is only ever written here, and entering or leaving a course is a
+ * reload, so no course's size can survive onto the shelf behind it.
+ *
+ * Called beside applyTheme() everywhere, and for the same reason: both are
+ * chrome that has to agree with a state document this app did not necessarily
+ * write — a merge, another tab's write, a restored backup, an erase.
+ *
+ * At boot it runs immediately after load(), while #app is still hidden behind
+ * the loading screen, so the first frame anyone sees is already at their size.
+ * Setting it any later is a flash of 15px type on a phone that asked for 19. */
+function applyFontSize() {
+  document.documentElement.setAttribute('data-font', state.settings.fontSize);
+}
+
 /* ─────────────────────────── wiring ─────────────────────────── */
 
 function wire() {
@@ -3760,6 +4168,51 @@ function wire() {
   $('#theme-btn').addEventListener('click', () => {
     MuninTheme.cycle();
     applyTheme();
+  });
+
+  $('#notes-open').addEventListener('click', (e) => openNotes(e.currentTarget));
+  $('#notes-close').addEventListener('click', () => closeNotes(false));
+  // Off the card closes it, the way the course picker does — and the test is
+  // "this click landed on the backdrop", not "this click did not land inside
+  // the card". They are the same sentence until a handler further down redraws
+  // the list: Edit and Delete both replace the row they are in, and the click
+  // then finishes bubbling from a node with no parent, whose closest('.notes-
+  // card') is honestly null. Pressing Edit shut the whole panel.
+  $('#notes').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeNotes(false);
+  });
+  $('#notes-write').addEventListener('submit', (e) => {
+    // A <form> so that the phone keyboard offers a submit key and Enter on a
+    // desktop does the obvious thing. Nothing here is going anywhere over HTTP.
+    e.preventDefault();
+    const box = $('#notes-text');
+    const done = noteEditing ? editNote(noteEditing, box.value) : addNote(box.value);
+    if (!done) return;
+    noteEditing = null;
+    box.value = '';
+    renderNotes();
+    box.focus({ preventScroll: true });
+  });
+  $('#notes-cancel').addEventListener('click', cancelNoteEdit);
+  // Delegated: the list is re-drawn on every change, and per-row listeners
+  // would be re-attached each time to elements that are already gone.
+  $('#notes-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-note]');
+    if (!row) return;
+    const id = row.dataset.note;
+    if (e.target.closest('[data-note-edit]')) {
+      startNoteEdit(id);
+      return;
+    }
+    if (!e.target.closest('[data-note-delete]')) return;
+    // Asked for, like every other destructive thing in this app: there is no
+    // undo behind it, and the words were somebody's to write.
+    if (!confirm('Delete this note?\n\nThere is no undo, and deleting it here deletes it on your other devices too.')) return;
+    // Editing the note that is being deleted leaves the box holding words with
+    // nothing to save them to.
+    if (noteEditing === id) cancelNoteEdit();
+    deleteNote(id);
+    $('#notes-text').focus({ preventScroll: true });
   });
 
   /* A changed result set is a different list, so it starts at the top. Without
@@ -3874,6 +4327,18 @@ function wire() {
   });
   $('#set-shuffle').addEventListener('change', (e) => {
     state.settings.shuffle = e.target.checked;
+    save();
+  });
+  $('#set-font').addEventListener('change', (e) => {
+    // Applied before the save, not after it: the save is debounced and the
+    // refusal path can send it back, and either way this is a control whose
+    // whole point is that you see the answer in the same breath as the change.
+    // A value the <select> could not have produced still goes through the same
+    // list the sanitiser uses — nothing writes an attribute unchecked.
+    const want = FONT_SIZES.includes(e.target.value) ? e.target.value : FONT_DEFAULT;
+    state.settings.fontSize = want;
+    e.target.value = want;
+    applyFontSize();
     save();
   });
   const setExamDate = (value) => {
@@ -4019,7 +4484,15 @@ function wire() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(`Exported ${payload.cardsWithHistory} cards of history.`);
+    // The same accounting as the line above the button: a file that holds only
+    // notes is still a file, and saying "0 cards" about it reads as a failure.
+    const notes = liveNotes().length;
+    toast(payload.cardsWithHistory
+      ? `Exported ${payload.cardsWithHistory} cards of history`
+        + (notes ? ` and ${plural(notes, 'note')}.` : '.')
+      : (notes
+        ? `Exported ${plural(notes, 'note')} and your settings.`
+        : 'Exported your settings — there is nothing else in this deck yet.'));
     renderBackupState();
   });
 
@@ -4053,19 +4526,52 @@ function wire() {
     const incoming = sanitise(s);
     const ids = Object.keys(incoming.recs);
     const known = ids.filter((id) => byId.has(id));
-    if (!known.length) {
-      toast('None of the cards in that file are in this deck. Nothing restored.');
+    const theirNotes = Object.values(incoming.notes).filter((note) => note.text).length;
+    // A file can be worth restoring for its notes alone. Somebody who has
+    // written about a deck on another device and studied it there hardly at all
+    // has a backup with no card ids to recognise, and refusing on that count
+    // was the app declining to restore the only thing in the file it had. A
+    // file with neither is still refused: that one really is somebody else's.
+    if (!known.length && !theirNotes) {
+      toast('Nothing in that file belongs to this deck — no cards of its own, and no notes. Nothing restored.');
       return;
     }
 
     const mine = Object.keys(state.recs).length;
+    const myNotes = liveNotes().length;
     const when = s.exportedAt ? ` from ${longDate(String(s.exportedAt).slice(0, 10))}` : '';
     const lost = ids.length - known.length;
+    const head = known.length
+      ? `Restore ${plural(known.length, 'card')} of history${when}?`
+      : `Restore the notes in this backup${when}? It holds no card history for this deck.`;
     const warn = mine
-      ? `\n\nThis replaces the ${mine} cards of history already on this device.`
+      ? `\n\nThis ${known.length ? 'replaces' : 'erases'} the ${mine} cards of history already on this device.`
       : '';
-    if (!confirm(`Restore ${known.length} cards of history${when}?${warn}`)) return;
+    // What happens to the notes is said out loud, because it is not what the
+    // rest of the sentence implies: everything else in this document is being
+    // replaced, and these are not.
+    let noteLine = '';
+    if (myNotes && theirNotes) {
+      noteLine = `\n\nNotes are merged, not replaced: your ${plural(myNotes, 'note')} here`
+        + ` and the ${plural(theirNotes, 'note')} in the file are all kept.`;
+    } else if (myNotes) {
+      noteLine = `\n\nYour ${plural(myNotes, 'note')} on this deck`
+        + ` ${myNotes === 1 ? 'is' : 'are'} kept — the file has none.`;
+    } else if (theirNotes) {
+      noteLine = `\n\nThe ${plural(theirNotes, 'note')} in the file`
+        + ` ${theirNotes === 1 ? 'is' : 'are'} added to this deck.`;
+    }
+    if (!confirm(head + warn + noteLine)) return;
 
+    // Settled before the document is replaced, out of the state that is about
+    // to be overwritten. Restore replaces review history — that is what the
+    // sentence above offers, and all of what it offers. Notes are not review
+    // history: a backup exported before this app had notes carries no `notes`
+    // key at all, so handing the file's document over whole answered "put my
+    // reviews back" by deleting every word the person had written since. The
+    // two sets meet under the same tombstone algebra a sync uses rather than a
+    // second one invented here, so a note deleted on either side stays deleted.
+    const notes = mergedNotes(state.notes, incoming.notes);
     try {
       publishStateReset();
     } catch (e) {
@@ -4073,16 +4579,26 @@ function wire() {
       return;
     }
     state = incoming;
+    state.notes = notes;
     // Drop history for cards that are no longer in the deck here rather than at
     // the next boot, so the number in the message is the truth.
     for (const id of ids) if (!byId.has(id)) delete state.recs[id];
     rollDay();
     if (!writeNow()) return;
     applyTheme();
+    applyFontSize();
     renderStats();
-    toast(lost
-      ? `Restored ${known.length} cards. ${lost} were from an older deck and were dropped.`
-      : `Restored ${known.length} cards of history.`);
+    renderNotesRow();
+    const nowNotes = liveNotes().length;
+    const cards = known.length
+      ? (lost
+        ? `Restored ${known.length} cards. ${lost} were from an older deck and were dropped.`
+        : `Restored ${plural(known.length, 'card')} of history.`)
+      : 'Restored the backup — it held no card history for this deck.';
+    toast(cards + (nowNotes ? ` ${plural(nowNotes, 'note')} on this deck.` : ''));
+    // A restore is one of the two ways two note sets can meet, so it is one of
+    // the two places the ceiling can bite.
+    sayIfNotesDropped();
   });
 
   // beforeinstallprompt and appinstalled are listened for in munin.js instead:
@@ -4147,18 +4663,27 @@ function wire() {
       toast('Copy your Sync key and turn Sync off before erasing this device, or the shared copy would return.', true);
       return;
     }
-    if (!confirm('Erase all review history on this device? Export a backup first if you might want it back.')) return;
+    const kept = liveNotes().length;
+    if (!confirm('Erase all review history on this device? Export a backup first if you might want it back.'
+      + (kept ? `\n\nYour ${kept} note${kept === 1 ? '' : 's'} on this deck are kept.` : ''))) return;
+    // The notes come across to the fresh state on purpose. This button offers
+    // to erase review history, and it says so in the sentence above; taking
+    // somebody's writing with it would be destroying a thing nobody was asked
+    // about. Removing the deck itself is the way to remove its notes, and that
+    // one takes the whole document with it.
+    const notes = state.notes;
     try {
       publishStateReset();
     } catch (e) {
       toast('Progress could not be erased because device storage is blocked.', true);
       return;
     }
-    state = freshState();
+    state = Object.assign(freshState(), { notes });
     if (!writeNow()) return;
     applyTheme();
+    applyFontSize();
     renderStats();
-    toast('Progress erased.');
+    toast(kept ? 'Progress erased. Your notes are still here.' : 'Progress erased.');
   });
 
   addEventListener('keydown', (e) => {
@@ -4191,6 +4716,31 @@ function wire() {
       }
       if (e.key === '+' || e.key === '=') zoomAt(innerWidth / 2, innerHeight / 2, clamp(lb.scale * 1.25, lb.fit, 6));
       if (e.key === '-') zoomAt(innerWidth / 2, innerHeight / 2, clamp(lb.scale / 1.25, lb.fit, 6));
+      return;
+    }
+    /* The notes panel, contained the same way and for the same reason. Escape
+       closes the panel rather than cancelling an edit in progress: it is the
+       one key every dialog in the app answers to, and Cancel is on screen. */
+    if (!$('#notes').hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeNotes(false); return; }
+      if (e.key === 'Tab') {
+        const box = $('#notes');
+        const focusable = Array.from(box.querySelectorAll(
+          'button:not([disabled]), a[href], textarea:not([disabled]),'
+            + ' input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter((el) => !el.hidden && el.getClientRects().length);
+        if (focusable.length) {
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (e.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey
+              && (document.activeElement === last || !box.contains(document.activeElement))) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
       return;
     }
     if (typing) return;
@@ -4354,6 +4904,7 @@ async function readRuntimeCourse(input) {
 async function boot() {
   load();
   applyTheme();
+  applyFontSize();
   let rawCourse;
   try {
     // An imported deck has no cards.json to fetch: it came out of a .apkg and
@@ -4472,6 +5023,10 @@ async function boot() {
   // paths above return before this line, so a deck that could not be read
   // keeps the screen — and its explanation — up.
   MuninBoot.dismiss().catch(console.error);
+  // The document this deck opened on has already been through the sanitiser,
+  // and if it was carrying more notes than this build keeps, that is the first
+  // moment there is anywhere to say so.
+  sayIfNotesDropped();
 
   if (globalThis.DSSync) {
     DSSync.init({
