@@ -1132,6 +1132,32 @@ mark {
 }
 .browse-ans .b-zoom { display: block; margin-top: 6px; font-size: .72rem; }
 
+/* What a row offers to do to its card, and what the layer has to say about it
+   first. Wrapping, because "the author rewrote this card after you edited it"
+   plus two choices is more than one phone line and pushing the buttons off the
+   edge would hide the choice the sentence exists to offer.
+
+   On the row rather than inside the answer, so the choice is on screen without
+   opening anything. Sitting under a closed disclosure, it pulls up against the
+   summary; the margin is what keeps it a line of its own. */
+.b-acts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px;
+  margin: 6px 0 4px; font-weight: 400;
+}
+.b-mine { flex: 1 1 100%; font-size: .72rem; color: var(--muted); }
+/* The one line here that is a decision rather than a label. Warn, not the
+   accent: the accent is what the app uses to point at things you asked for. */
+.b-moved { color: var(--warn); }
+.b-acts .link-btn { padding: 6px 2px; min-height: 40px; flex: none; }
+/* Above the deck rather than under it, and set off from it: these are cards
+   that are not in the deck, and reading on past them into the ones that are
+   should not feel like one list. */
+.hidden-list {
+  margin: 0 0 6px; padding-bottom: 6px;
+  border-bottom: var(--bw) solid var(--line);
+}
+.hidden-list .b-q { color: var(--muted); }
+
 /* ── stats ───────────────────────────────────────────────────────── */
 
 .tiles {
@@ -1408,6 +1434,75 @@ mark {
 .note-when { flex: 1; min-width: 0; font-size: .72rem; color: var(--muted); }
 .note-foot .link-btn { padding: 6px 2px; min-height: 40px; flex: none; }
 .notes-empty { margin: 16px 0 0; font-size: .8rem; line-height: 1.65; color: var(--muted); }
+
+/* ── the card sheet ──────────────────────────────────────────────── */
+
+/* The same furniture as the notes panel, because it is the same kind of thing:
+   a sheet up the bottom edge of the screen with the keyboard under it. Nothing
+   here names a colour — every value is one of the two theme sets' variables, so
+   the sheet is drawn in whichever one is showing and there is no second design
+   to keep in step. --scrim is the backdrop for the reason it exists: derived
+   from --stroke it would come out a white wash in the dark theme. */
+.sheet {
+  position: fixed; inset: 0; z-index: 82;
+  background: var(--scrim);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet[hidden] { display: none; }
+.sheet-card {
+  width: min(560px, 100%); max-height: 92vh; overflow-y: auto;
+  background: var(--bg); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
+}
+.sheet-bar { display: flex; align-items: center; gap: 8px; }
+.sheet-bar h2 {
+  flex: 1; margin: 0; font-size: 1.05rem; font-weight: 500;
+  letter-spacing: -.02em; text-transform: lowercase;
+}
+.sheet-form { margin: 4px 0 0; }
+.sheet-label {
+  display: block; margin: 14px 0 6px;
+  font-size: .78rem; font-weight: 500; text-transform: lowercase;
+}
+/* The text input is the deck name on the importer's creation screen, which
+   borrows this form wholesale. Named here rather than there so the three boxes
+   somebody fills in are drawn by one rule. */
+.sheet-form textarea, .sheet-form input[type="text"], .sheet-where select {
+  display: block; width: 100%; padding: 12px 14px;
+  background: var(--surface); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
+  font: inherit; font-size: .92rem; line-height: 1.6;
+}
+.sheet-form textarea { resize: vertical; }
+/* What the boxes could not hold, said before the first edit rather than found
+   out from the result. Boxed, because it is the one thing on this sheet that is
+   news rather than furniture. */
+.sheet-warn {
+  margin: 12px 0 0; padding: 10px 12px;
+  border: var(--bw) solid var(--warn); border-radius: var(--r-sm);
+  font-size: .78rem; line-height: 1.6; color: var(--text);
+}
+.sheet-fine { margin-top: 12px; }
+.sheet-acts { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.sheet-acts .primary { flex: 1; }
+/* A fixed floor, so a message appearing does not shove the buttons down the
+   page under the finger that is reaching for them. */
+.sheet-say { margin: 10px 0 0; min-height: 1.3em; font-size: .78rem; color: var(--muted); }
+/* The reader's own diagnostics, in the shape the importer prints them. */
+.sheet-diags { margin: 8px 0 0; padding-left: 18px; }
+.sheet-diags li { margin: 8px 0; font-size: .76rem; line-height: 1.55; }
+.sheet-diags code {
+  display: block; font-family: var(--mono); font-size: .7rem; color: var(--muted);
+}
+.sheet-diags small { display: block; color: var(--muted); }
+.sheet-more {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+  margin-top: 14px; padding-top: 10px; border-top: 2px dotted var(--line);
+}
+.sheet-more .link-btn { flex: none; }
+.danger-link { color: var(--g1); }
 
 /* ── lightbox ────────────────────────────────────────────────────── */
 

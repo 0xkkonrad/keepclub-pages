@@ -27,6 +27,13 @@ const MUNIN = {
    * is three chances to change one of them and not the others. */
   stateKey: (id) => 'munin/' + id + '/state/v1',
   resetKey: (id) => 'munin/' + id + '/state/v1/reset',
+  /* The cards a person wrote into this deck, and their edits to the deck's
+   * own cards. A sibling of the state document rather than a key inside it:
+   * mergeState() in sync.js builds a fresh object and copies only the keys it
+   * knows, so a key it has never heard of is not skipped but dropped, and the
+   * adopted result is then written back over the original. Cards kept in there
+   * would be destroyed by a mistake in a file that is not about cards. */
+  cardsKey: (id) => 'munin/' + id + '/cards/v1',
   bootKey: (id) => 'munin/boot/' + id,
   registry: 'courses/index.json',
 
@@ -1008,6 +1015,11 @@ async function bootLocal(id) {
     sectionArt: rec.sectionArt || {},
     groupArt: rec.groupArt || {},
     deck: rec.deck,
+    // A deck whose document somebody wrote here, rather than one that came out
+    // of a file. app.js needs it for one thing: the cards in that document are
+    // cards a person wrote, and every screen that says who wrote a card should
+    // say so about those too.
+    own: rec.importFormat === 'own',
     mediaUrl,
     resolveMediaSource,
   }), async () => { globalThis.DOODLE = MUNIN_DOODLE; });
@@ -1208,13 +1220,14 @@ async function courseMeta(id) {
   }
 }
 
-/* Study history, and cached loading screens, for decks that are not here.
+/* Study history, the cards somebody wrote, and cached loading screens, for
+ * decks that are not here.
  *
- * store.remove() deletes the state key as it goes, but the deck being removed
- * may be the one open behind this overlay, and that session writes its state
- * again on the way out — so the key comes back a moment after it was deleted,
- * owned by nothing, for ever. Collecting orphans whenever the shelf draws is
- * the only point where the full list of decks is in hand anyway.
+ * store.remove() deletes both of a deck's documents as it goes, but the deck
+ * being removed may be the one open behind this overlay, and that session
+ * writes its state again on the way out — so the key comes back a moment after
+ * it was deleted, owned by nothing, for ever. Collecting orphans whenever the
+ * shelf draws is the only point where the full list of decks is in hand anyway.
  *
  * DELETING IS ONLY EVER DONE FROM A LIST WE ACTUALLY HAVE. `null` means the
  * question could not be answered — a database that would not open, a registry
@@ -1226,7 +1239,12 @@ function sweepOrphans(decks, courses) {
   if (decks) {
     const live = new Set(decks.map((d) => d.id));
     for (const k of Object.keys(localStorage)) {
-      const s = /^munin\/(local-[a-z0-9]+)\/state\/v1$/.exec(k);
+      // Both of a deck's documents, not only its review history: the cards
+      // somebody wrote into it live in a sibling key (MUNIN.cardsKey) and are
+      // as orphaned by the deck going as the history is. Swept together
+      // because they are re-created together — an open tab that rewrites one
+      // on the way out is just as able to rewrite the other.
+      const s = /^munin\/(local-[a-z0-9]+)\/(?:state|cards)\/v1$/.exec(k);
       if (s && !live.has(s[1])) localStorage.removeItem(k);
     }
   }
@@ -1314,6 +1332,35 @@ function deckProgress(id) {
   }
 }
 
+/* How many cards a deck holds, counting the ones written into it since.
+ *
+ * The number on the deck's record is what the file held the day it was read,
+ * and nothing moves it afterwards — the record cannot simply be rewritten,
+ * because store.put() clears a deck's whole media range before it writes and a
+ * shelf that fixed a number would take every picture in the deck off with it.
+ * So the layer is read here instead, the way import.js reads it: a live record
+ * under a written id is a card the deck gained, an emptied one under a shipped
+ * id is a card it lost to hiding. A document that will not parse contributes
+ * nothing, which is exactly what it contributes to the deck. */
+function deckCards(d) {
+  const shipped = Number(d.cards) || 0;
+  let cards = null;
+  try {
+    const raw = localStorage.getItem(MUNIN.cardsKey(d.id));
+    cards = raw === null ? null : JSON.parse(raw).cards;
+  } catch (e) {
+    return shipped;
+  }
+  if (!cards || typeof cards !== 'object') return shipped;
+  let total = shipped;
+  for (const [id, rec] of Object.entries(cards)) {
+    if (!rec || typeof rec !== 'object') continue;
+    if (id.startsWith('u.')) { if (rec.front) total++; }
+    else if (rec.hidden === true) total--;
+  }
+  return Math.max(0, total);
+}
+
 /* An imported deck is titled by whoever made the .apkg, so everything about it
  * on this screen is escaped. */
 function localTile(d) {
@@ -1324,12 +1371,14 @@ function localTile(d) {
         data-local-shelf-art="${escHtml(shelfArtwork)}" data-local-deck="${escHtml(d.id)}"></span>`
     : tileArt(art);
   const done = deckProgress(d.id);
+  const cards = deckCards(d);
   return `<div class="shelf-row">
     <button type="button" class="shelf-tile" data-course="${escHtml(d.id)}"
         style="--tile-accent:${escHtml(MUNIN.theme.accent.light)}">
       ${emblem}
-      <span><b>${escHtml(d.title)}</b><small>your deck · ${Number(d.cards).toLocaleString('en-GB')
-      } cards · ${new Date(d.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      <span><b>${escHtml(d.title)}</b><small>your deck · ${cards.toLocaleString('en-GB')
+      } ${cards === 1 ? 'card' : 'cards'} · ${
+  new Date(d.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       }${done ? ' · ' + done : ''}</small></span>
     </button>
     <button type="button" class="shelf-del" data-del="${escHtml(d.id)}"

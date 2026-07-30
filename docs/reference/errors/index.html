@@ -155,6 +155,10 @@
             <dt><code>course.invalid_id</code></dt>
             <dd>An ID is blank or does not follow the lowercase stable-ID format. Correct it; importers must not generate one automatically.</dd>
           </div>
+          <div id="course-reserved-id">
+            <dt><code>course.reserved_id</code></dt>
+            <dd>An ID begins with <code>u.</code>, the prefix reserved for cards a person writes in the app. Rename it; a course may not ship an identity in that namespace.</dd>
+          </div>
           <div id="course-cards-required">
             <dt><code>course.cards_required</code></dt>
             <dd><code>cards</code> is missing, empty, not a list, or has more than 50,000 entries. Add at least one card, or split a course above the limit.</dd>

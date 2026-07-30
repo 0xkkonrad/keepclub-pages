@@ -132,6 +132,10 @@ function readLocal() {
     rev: num(course && course.rev),
     at: num(course && course.at),
     err: course && course.err ? String(course.err) : '',
+    // Whether the last failure is one only the person can clear. Read back off
+    // the document rather than kept in memory, because the screen that says so
+    // is usually reached on a later load than the round that failed.
+    errYours: !!(course && course.errYours),
   };
 }
 
@@ -145,6 +149,7 @@ function writeLocal(record) {
     rev: num(record.rev),
     at: num(record.at),
     err: record.err || '',
+    errYours: !!record.errYours,
   };
   writeBox(box);
 }
@@ -164,6 +169,7 @@ function status() {
         at: record.at,
         rev: record.rev,
         err: record.err,
+        errYours: record.errYours,
       }
     : { on: false, available: true };
 }
@@ -263,51 +269,98 @@ function mergeSettings(x, y) {
   return Object.assign({}, winner);
 }
 
-/* ─────────────────────────── notes ─────────────────────────── */
+/* ────────────────────── what you write ────────────────────── */
 
-/* Notes merge as a set of separately-stamped records, never as one block.
+/* Notes and the cards you write merge as separately-stamped records, never as
+ * one block.
  *
  * Settings are one thing a person changes, so last-write-wins over the whole
  * block is honest there. Notes are many things they write, and two devices
  * between one sync and the next routinely both have new ones — merged as a
  * block, whichever device wrote fewer of them would simply lose them. So each
- * note carries its own `at` (when it was written) and `ed` (when it last
- * changed), and the union is taken id by id.
+ * record carries its own `at` (when it was written) and `ed` (when it last
+ * changed), and the union is taken id by id. A card you wrote, and an edit you
+ * made to a card the course ships, are the same shape and the same question.
  *
  * Deleting is the half that needs the care. A plain union resurrects every note
  * the other device has not heard about yet, so a delete is recorded rather than
- * dropped: the record stays, its text emptied, its `ed` newer than the text it
- * replaces — and that empty record beats the older words on the device that
+ * dropped: the record stays, its words emptied, its `ed` newer than the words it
+ * replaces — and that empty record beats the older ones on the device that
  * still has them. An empty note is therefore the delete marker, which is also
- * why the app refuses to store an empty note as a note.
+ * why the app refuses to store an empty note as a note; an emptied card record
+ * is the same marker, and carries `hidden` when what it records is a course
+ * card taken out rather than one of your own deleted.
  *
  * The markers are what makes this converge, and they are also why the entry
- * count is capped. Dropping the oldest markers can only bring back a note that
- * was deleted more than NOTE_SLOTS entries ago, on a device that has been away
+ * count is capped. Dropping the oldest markers can only bring back something
+ * deleted more than WRITTEN_SLOTS entries ago, on a device that has been away
  * across all of them; an unbounded set on a bounded server blob is the worse
  * failure, because it takes the review history down with it.
  *
- * Live notes are capped separately, and lower. Capping the entries alone was
+ * Live records are capped separately, and lower. Capping the entries alone was
  * not the same promise: app.js refuses the 201st note on one device, but three
  * devices holding 200 each merged to 600 live notes inside the entry budget, so
  * a deck could arrive back over a limit the app had already told the person
- * about — and then lose 200 of them to the next delete marker instead. The two
- * numbers are the same number in both files. Words that go are counted, because
- * the one thing this must never be is quiet: see takeNoteDrops().
+ * about — and then lose 200 of them to the next delete marker instead. Every
+ * number here is the same number in app.js. What goes is counted, because the
+ * one thing this must never be is quiet: see takeNoteDrops(), takeCardDrops().
  */
-const NOTE_SLOTS = 400;
-// Live notes one deck may hold. Must match app.js's NOTE_MAX — the app enforces
-// it as you type and the merge enforces it as devices meet, and two different
-// ceilings would mean a note accepted here and dropped one sync later.
-const NOTE_LIVE = 200;
-// An id is used as an object key, here and in app.js's sanitiser, which is the
-// one thing about it that has to be true. Hex is what app.js writes; anything
-// else came from somewhere else and is not stored under a key of its choosing.
+
+/* Where the ceilings come from, which was a guess in this repo until it was not.
+ *
+ * The backend is the one in content/day-skipper/supabase/migrations/
+ * 20260727080812_sync_blobs.sql: one jsonb blob per (app, key hash), and
+ * sync_put refuses a write over `sync.apps.max_bytes` with SQLSTATE 22023,
+ * measured as octet_length(p_data::text). Both built-in courses are inserted at
+ * the column default, so the bound is this number and not an assumption.
+ *
+ * 262,144 bytes is the WHOLE blob: review history, the day calendar, the
+ * milestones, the settings, and everything a person has written. The history is
+ * the part nobody chooses — Day Skipper's 537 cards, every one of them
+ * answered, are 57 KB of records, and 400 days of calendar another 6 KB — so
+ * about 66 KB is spoken for before anybody writes a word, and it grows with the
+ * deck rather than with the person. That leaves roughly 190 KB.
+ *
+ * A note at its 2,000-character ceiling stores at about 2.1 KB; a card, having
+ * two sides, about 4.2 KB. So what follows is ONE budget shared by notes and
+ * cards rather than one each: two independent ceilings of 200 describe 800 KB
+ * of writing inside a 256 KB blob, and the thing that loses when the blob will
+ * not fit is the review history sharing the document.
+ *
+ * The ceiling is a count and not a byte count, deliberately. Eviction has to be
+ * a prefix of a total order or a three-device merge stops converging, and
+ * "keep records until the bytes run out" is not one: drop a long record and a
+ * shorter one behind it moves up into the space, so merging a with b then c can
+ * keep a different set from merging b with c then a. Records are counted here,
+ * and the byte bound is enforced where it can be exact and where nothing is
+ * lost by it — once, on the way out, in syncOnce().
+ */
+const MAX_BYTES = 262144;
+// Live records one deck may hold, notes and your own cards together. Must match
+// app.js's WRITTEN_LIVE — the app enforces it as you type and the merge
+// enforces it as devices meet, and two different ceilings would mean a note
+// accepted here and dropped one sync later.
+const WRITTEN_LIVE = 200;
+// Stored entries: the live records plus the emptied ones that record a delete,
+// a hide or a revert. Must match app.js's WRITTEN_SLOTS.
+const WRITTEN_SLOTS = 400;
+// An id is used as an object key, here and in app.js's sanitisers, which is the
+// one thing about it that has to be true. Hex is what app.js writes for a note;
+// anything else came from somewhere else and is not stored under a key of its
+// choosing.
 const NOTE_ID = /^[a-z0-9]{1,64}$/;
-// Live notes the merges since the last reading had to drop. A merge happens
+// A card record is keyed either by an id this app wrote — the reserved `u.`
+// prefix no shipped course may use — or by the id the course shipped the card
+// under, which is an override. Both mirror cardIdOk() in app.js exactly: an id
+// this file keeps and that file drops would arrive on every single sync.
+const CARD_ID = /^u\.[a-f0-9]{1,32}$/;
+const COURSE_CARD_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const cardIdOk = (id) => (id.startsWith('u.') ? CARD_ID.test(id) : COURSE_CARD_ID.test(id));
+// Live records the merges since the last reading had to drop. A merge happens
 // where nobody is looking — in the middle of a sync round, several times over —
 // so it cannot speak for itself; it counts instead, and the app asks afterwards.
 let noteDrops = 0;
+let cardDrops = 0;
 
 /** How many of somebody's words the merge dropped, once. Read and cleared
  *  together: this exists so the app can say it happened, and saying it twice
@@ -318,54 +371,150 @@ function takeNoteDrops() {
   return total;
 }
 
-function pickNote(x, y) {
+/** The same, for cards. Two counters rather than one, because the sentence the
+ *  app says names what went, and a card that went is not a note that went. */
+function takeCardDrops() {
+  const total = cardDrops;
+  cardDrops = 0;
+  return total;
+}
+
+/* One stamped record against another, for a note and for a card alike: it is
+ * the same question — which of these two is the current one — and a second
+ * answer to it would be a second answer to the tombstone question. */
+function pickWritten(x, y) {
   if (!x) return y;
   if (!y) return x;
   let winner;
   if (num(x.ed) !== num(y.ed)) winner = num(x.ed) > num(y.ed) ? x : y;
-  else winner = stable(x) <= stable(y) ? x : y;
-  // When a note was written is a fact about the past, and the earliest claim is
-  // the true one — the same rule the milestones keep. Carrying the winner's own
-  // stamp instead made a list re-order itself after a sync, which reads as the
-  // app shuffling notes nobody touched.
+  // On a tie, compared with `at` blanked, exactly as pickRec compares with the
+  // lapse count blanked and for the same reason: `at` is derived by the line
+  // below rather than held by either device, so feeding it back into the
+  // comparison made a three-device merge depend on which pair met first — and
+  // it sorts ahead of the words, so a rewritten stamp decided which words won.
+  else {
+    const xa = Object.assign({}, x, { at: 0 });
+    const ya = Object.assign({}, y, { at: 0 });
+    winner = stable(xa) <= stable(ya) ? x : y;
+  }
+  // When something was written is a fact about the past, and the earliest claim
+  // is the true one — the same rule the milestones keep. Carrying the winner's
+  // own stamp instead made a list re-order itself after a sync, which reads as
+  // the app shuffling notes nobody touched.
   const written = [num(x.at), num(y.at)].filter((value) => value > 0);
   return Object.assign({}, winner, { at: written.length ? Math.min(...written) : 0 });
 }
 
-function mergeNotes(a, b) {
-  const entries = [];
-  for (const id of new Set(Object.keys(a).concat(Object.keys(b)))) {
-    if (!NOTE_ID.test(id)) continue;
-    entries.push([id, pickNote(
-      a[id] === undefined ? null : obj(a[id]),
-      b[id] === undefined ? null : obj(b[id])
-    )]);
-  }
-  // Live notes before delete markers, newest first, id last so the order is
-  // total: an eviction that depended on iteration order would make a
-  // three-device merge depend on which pair was merged first.
-  entries.sort((x, y) => {
-    const liveX = x[1].text ? 0 : 1, liveY = y[1].text ? 0 : 1;
-    if (liveX !== liveY) return liveX - liveY;
-    if (num(x[1].ed) !== num(y[1].ed)) return num(y[1].ed) - num(x[1].ed);
-    return x[0] < y[0] ? -1 : 1;
-  });
-  // Both ceilings are read off that one order, which is what keeps the merge
-  // associative: whether an entry survives depends only on the entries ahead of
-  // it, and every live note is ahead of every marker. The markers then fill
-  // whatever the live notes left of the entry budget.
-  const out = {};
+/** What makes a record of each kind live rather than a delete marker. */
+const LIVE_FIELD = { note: 'text', card: 'front' };
+
+/* obj() around the record as well as the block: this is the one entry point a
+ * caller reaches with blocks it assembled itself rather than with the output of
+ * a union, and a null under an id would otherwise throw on the read below —
+ * inside a sync round, where a thrown error is a sync that never happened. */
+function writtenEntries(block, kind) {
+  const field = LIVE_FIELD[kind];
+  return Object.entries(obj(block))
+    .map(([id, raw]) => {
+      const rec = obj(raw);
+      return { kind, id, rec, live: !!rec[field] };
+    });
+}
+
+/* Live records before delete markers, newest edit first, then the kind, then
+ * the id. Total, so what a ceiling keeps never depends on which object the
+ * entries were read out of: an eviction that depended on iteration order would
+ * make a three-device merge depend on which pair was merged first. The kind is
+ * in the order because notes and cards share one ceiling and two records of
+ * different kinds can carry the same stamp. */
+function writtenOrder(x, y) {
+  if (x.live !== y.live) return x.live ? -1 : 1;
+  if (num(x.rec.ed) !== num(y.rec.ed)) return num(y.rec.ed) - num(x.rec.ed);
+  if (x.kind !== y.kind) return x.kind < y.kind ? -1 : 1;
+  return x.id < y.id ? -1 : 1;
+}
+
+/** Take entries in that order until a ceiling stops them.
+ *
+ * Both ceilings are read off the one order, which is what keeps the merge
+ * associative: whether an entry survives depends only on the entries ahead of
+ * it, and every live record is ahead of every marker. The markers then fill
+ * whatever the live records left of the entry budget. */
+function keepWritten(entries) {
+  entries.sort(writtenOrder);
+  const out = { notes: {}, cards: {} };
   let kept = 0, live = 0;
-  for (const [id, note] of entries) {
-    if (kept >= NOTE_SLOTS) break;
-    if (note.text) {
-      if (live >= NOTE_LIVE) { noteDrops++; continue; }
+  for (const entry of entries) {
+    if (kept >= WRITTEN_SLOTS) break;
+    if (entry.live) {
+      if (live >= WRITTEN_LIVE) {
+        if (entry.kind === 'note') noteDrops++; else cardDrops++;
+        continue;
+      }
       live++;
     }
-    out[id] = note;
+    out[entry.kind === 'note' ? 'notes' : 'cards'][entry.id] = entry.rec;
     kept++;
   }
   return out;
+}
+
+function unionOf(a, b, kind, idOk) {
+  const entries = [];
+  const field = LIVE_FIELD[kind];
+  for (const id of new Set(Object.keys(a).concat(Object.keys(b)))) {
+    if (!idOk(id)) continue;
+    const rec = pickWritten(
+      a[id] === undefined ? null : obj(a[id]),
+      b[id] === undefined ? null : obj(b[id])
+    );
+    entries.push({ kind, id, rec, live: !!rec[field] });
+  }
+  return entries;
+}
+
+/* One kind on its own. Capping a block against the joint ceilings before the
+ * two blocks meet cannot change what survives — the order over one kind is the
+ * joint order with the other kind taken out, so anything this drops the joint
+ * pass would have dropped too — and it keeps mergeNotes() a whole answer for
+ * app.js, which calls it on its own when a backup file is restored. */
+function mergeNotes(a, b) {
+  return keepWritten(unionOf(a, b, 'note', (id) => NOTE_ID.test(id))).notes;
+}
+
+function mergeCards(a, b) {
+  return keepWritten(unionOf(a, b, 'card', cardIdOk)).cards;
+}
+
+/** The one ceiling notes and cards share, over both blocks at once. */
+function capWritten(notes, cards) {
+  return keepWritten(
+    writtenEntries(notes, 'note').concat(writtenEntries(cards, 'card'))
+  );
+}
+
+/** The document as Postgres writes it back, which is what sync_put measures.
+ *
+ * Not JSON.stringify. jsonb does not store the text it was sent — it parses it
+ * and re-serialises, and its text form puts a space after every `:` and every
+ * `,`. A blob of five thousand keys is therefore five thousand bytes bigger
+ * there than here, and a check that measured the smaller number would wave
+ * through blobs the server then refuses, which is the exact round trip this
+ * measurement exists to save. Erring the other way costs a person nothing: the
+ * refusal below is local and everything they wrote is still on the device. */
+function pgJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(pgJson).join(', ') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .map((key) => JSON.stringify(key) + ': ' + pgJson(value[key]))
+      .join(', ') + '}';
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+function blobBytes(value) {
+  return new TextEncoder().encode(pgJson(value)).length;
 }
 
 /* Commutative and idempotent: syncing the same pair repeatedly cannot inflate
@@ -424,7 +573,19 @@ function mergeState(a, b) {
   }
 
   out.settings = mergeSettings(obj(a.settings), obj(b.settings));
-  out.notes = mergeNotes(obj(a.notes), obj(b.notes));
+  // The two things a person writes, merged kind by kind and then held to the
+  // one ceiling they share. Nothing above this line is touched by either: a
+  // card record arriving as a delete marker takes the card out of the deck, and
+  // it must not take the review history for that card with it in the same tick.
+  // Records are keyed by card id and this file would be the worst possible
+  // place to delete one from — the app that can see whether the card is really
+  // gone, and can say so out loud, does that sweep locally.
+  const written = capWritten(
+    mergeNotes(obj(a.notes), obj(b.notes)),
+    mergeCards(obj(a.cards), obj(b.cards))
+  );
+  out.notes = written.notes;
+  out.cards = written.cards;
   return out;
 }
 
@@ -488,6 +649,22 @@ async function syncOnce(local, generation) {
   }
 
   for (let round = 0; changed && round < MAX_ROUNDS; round++) {
+    // Checked here rather than trusted to the counted ceilings, because the
+    // ceilings count records and the server counts bytes. Over the bound the
+    // server answers 22023 and stores nothing, so sending it costs a round trip
+    // and returns a sentence nobody can act on. Refusing here loses nothing —
+    // every word is still on this device — and names the way out. Inside the
+    // loop, because a revision conflict merges another device's writing in.
+    if (blobBytes(state) > MAX_BYTES) {
+      // Marked as the person's to fix, not the network's. Every other failure
+      // here is worth another go on its own; this one produces the same answer
+      // for ever, and a screen promising that it will try again is a screen
+      // telling somebody to wait for something that cannot happen.
+      const full = new Error('the notes and cards in this deck are more than sync can '
+        + 'carry, so nothing was sent; deleting some of them lets the rest through');
+      full.yours = true;
+      throw full;
+    }
     let result;
     try {
       result = await rpc('sync_put', {
@@ -561,7 +738,8 @@ function sync(source) {
       }
       const record = readLocal();
       if (record) {
-        writeLocal(Object.assign({}, record, { err: error.message || 'failed' }));
+        writeLocal(Object.assign({}, record,
+          { err: error.message || 'failed', errYours: !!error.yours }));
       }
       cfg.onStatus({ busy: false, ok: false, error: error.message || 'failed' });
       throw error;
@@ -605,10 +783,16 @@ root.DSSync = {
   mergeState,
   mergeSettings,
   mergeNotes,
+  mergeCards,
+  capWritten,
   takeNoteDrops,
-  NOTE_LIVE,
+  takeCardDrops,
+  MAX_BYTES,
+  WRITTEN_LIVE,
+  WRITTEN_SLOTS,
+  blobBytes,
   pickRec,
-  pickNote,
+  pickWritten,
   streakFrom,
   stable,
   app: () => cfg.app,

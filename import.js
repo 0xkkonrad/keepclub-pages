@@ -12,6 +12,7 @@
 
 import { readApkg, ApkgError, MAX_PACKAGE_BYTES } from './lib/anki.js';
 import { buildDeck, RAVENS } from './lib/deck.js';
+import { readCourseForRuntime } from './lib/course-runtime.js';
 import { readCourseFile } from './lib/course-package.js';
 import {
   normalizeLegacyCourse,
@@ -75,6 +76,105 @@ function keepReceipt(result) {
   };
 }
 
+/* How many cards a person has written into a deck, or edited in it.
+ *
+ * The receipt's promise about progress reads as a promise about everything of
+ * theirs in the deck, and the cards they wrote are the part of it that no file
+ * being imported can put back. So the count is taken before the replace button
+ * is drawn, and the receipt says what happens to them.
+ *
+ * Read straight off the layer's document rather than through app.js: this
+ * screen runs over the shelf, where no deck is open and app.js may not be
+ * loaded at all. A document that will not parse counts as none, which is not a
+ * guess — a cards document the app cannot read contributes no cards to the
+ * deck either, so nought is exactly what the person is looking at. */
+function writtenInto(id) {
+  try {
+    const raw = localStorage.getItem(globalThis.MUNIN.cardsKey(id));
+    const cards = raw === null ? null : JSON.parse(raw).cards;
+    if (!cards || typeof cards !== 'object') return 0;
+    return Object.values(cards)
+      .filter((rec) => !!rec && typeof rec === 'object' && !!rec.front).length;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/* ── a deck of your own ───────────────────────────────────────────────────── */
+
+/* A course with no cards is not a document this app will read: the reader
+ * refuses one outright (web/lib/course.js:903-908), and it is right to — an
+ * empty deck is a tile that opens on nothing. So a deck of your own cannot
+ * exist before its first card does, and it is created BY that card. Nothing
+ * reaches the database until Save, which is what makes a sheet closed halfway
+ * leave no tile behind.
+ *
+ * The deck's own card lives in the deck's own document, the same place a
+ * course's cards live. Every card after it is the layer app.js already keeps
+ * over any deck (MUNIN.cardsKey), so the app has one model either way: this
+ * document is what the deck ships, and your layer goes over the top of it.
+ */
+
+const DECK_NAME_LEN = 120;
+
+/* Control characters out, ends trimmed, length capped: the same discipline
+ * app.js applies to a card side, because this text is going to the same
+ * places. */
+const typed = (value, limit) => String(value == null ? '' : value)
+  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+  .trim()
+  .slice(0, limit);
+
+/* Whatever is in a box, held to that box's own maxlength.
+ *
+ * The number is not written here. The two card boxes are a clone of the card
+ * sheet's, whose cap is app.js's CARD_LEN written once into index.html, and a
+ * second copy of it in this file is a second copy to drift — this screen would
+ * go on taking two thousand characters the day the sheet stopped. The reader
+ * would take a longer side than either, but a first card that could not
+ * survive its own first edit is not a first card worth writing. */
+const typedIn = (input) => typed(input.value, input.maxLength > 0 ? input.maxLength : Infinity);
+
+/* The shape a course's own card ids have: ten lowercase hex characters, which
+ * is what the RYA courses' build script produces and what the id grammar
+ * accepts (web/lib/course.js:9).
+ *
+ * Deliberately NOT the reserved `u.` prefix the cards layer owns. Both course
+ * readers refuse a shipped course that uses one, and this card is shipped —
+ * by the deck it is making. Random rather than a hash of the question, because
+ * ids are opaque by contract and two cards with the same words are two cards. */
+function newCardId() {
+  const bytes = new Uint8Array(5);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/* The one-card course, validated the way every other course in this app is.
+ *
+ * Validation is not hand-written here, any more than it is in the card sheet:
+ * the document goes through the same reader every course goes through, and
+ * what comes back is both the verdict and the diagnostics — message and
+ * correction — that the screen prints. Through the runtime reader rather than
+ * the plain one, because a side the Markdown parser will not take is exactly
+ * the kind of thing worth hearing about now rather than at the first boot of a
+ * deck that will not open.
+ *
+ * The document handed back is the one that was written, not the one the reader
+ * produced: the .keep path stores the parsed source for the same reason, and
+ * boot owns the one render pass. Storing the reader's output would put its
+ * rendered HTML on disk to be rendered as Markdown a second time — and its
+ * derived fields back through a validator that has never heard of them. */
+async function readOwnCourse(id, title, front, back) {
+  const written = {
+    schemaVersion: 2,
+    courseId: id,
+    title,
+    cards: [Object.assign({ cardId: newCardId(), front }, back ? { back } : {})],
+  };
+  const read = await readCourseForRuntime(written);
+  return { written, course: read.course, diagnostics: read.diagnostics };
+}
+
 /* ── the screen ───────────────────────────────────────────────────────────── */
 
 export function openImporter() {
@@ -111,9 +211,12 @@ export function openImporter() {
    * putting the person two screens back from where they were. Whatever is on
    * top takes the key. */
   const historyToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  // Textareas and selects are named because this sheet now has some: writing a
+  // deck's first card is two boxes, and a containment that did not know about
+  // them wrapped the Tab key straight past what somebody is typing into.
   const focusable = () => [...el.querySelectorAll(
     'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]),'
-      + ' [tabindex]:not([tabindex="-1"])'
+      + ' textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
   )].filter((node) => !node.hidden && !node.inert && node.getClientRects().length);
   const modalKeys = (e) => {
     if (e.key === 'Escape') {
@@ -157,6 +260,9 @@ export function openImporter() {
    * into the deck seconds later was telling the person the opposite of what
    * had happened. The escape is refused for the second it takes instead. */
   let saving = false;
+  // The deck this screen made, once it has. Only ever set after the database
+  // transaction has committed.
+  let madeId = '';
   const x = el.querySelector('.imp-x');
 
   const close = (fromHistory) => {
@@ -170,6 +276,23 @@ export function openImporter() {
     for (const u of under) u.inert = false;
     el.remove();
     if (opener && opener.isConnected) opener.focus();
+    /* A deck made on this screen is not on the shelf underneath it: that list
+     * was drawn before the deck existed, and leaving it out is the app telling
+     * somebody the deck they just wrote is not there. So the way out of this
+     * one screen is a reload onto the picker — the entry says which of the two
+     * things the bare address means, which is how the shell already tells a
+     * Back press out of a course from a cold open. Every other way out of this
+     * sheet is a navigation into a deck, which is why nothing else needs it. */
+    if (!madeId) return;
+    try {
+      history.replaceState(Object.assign({}, history.state, { munin: 'shelf' }), '');
+    } catch (e) {
+      // A history that will not take a state is not a reason to stay on a
+      // screen that is already gone. The reload still happens; it may resume
+      // the last course instead, where the new deck is one tap away.
+      console.warn('the picker could not be marked as where this reload lands', e);
+    }
+    location.reload();
   };
   x.addEventListener('click', () => close(false));
   x.focus();
@@ -187,6 +310,8 @@ export function openImporter() {
       <button type="button" class="imp-file" id="imp-file">choose a course file${
   draggable ? '' : '<small>your cards stay on this device</small>'}</button>
       <input type="file" accept=".keep.yml,.keep,.apkg,.colpkg,application/zip,text/yaml" hidden id="imp-input">
+      <button type="button" class="imp-mine" id="imp-mine">write your own cards<small>a deck of
+        your own, made by its first card</small></button>
       <p class="imp-how"><b>keep club courses:</b> choose a text-only <b>.keep.yml</b> or a
         <b>.keep</b> package with its media. <a href="./docs/#quick-start">See the format.</a><br><br>
         <b>from anki:</b> <b>File → Export</b>, choose <b>Anki Deck Package</b>. Scheduling
@@ -196,6 +321,7 @@ export function openImporter() {
     for (const opener of body.querySelectorAll('.imp-file, .imp-drop')) {
       opener.addEventListener('click', () => input.click());
     }
+    body.querySelector('#imp-mine').addEventListener('click', () => own());
 
     if (moveFocus) body.querySelector('#imp-file').focus();
     const zone = body.querySelector('.imp-drop');
@@ -211,6 +337,244 @@ export function openImporter() {
       const f = e.dataTransfer?.files?.[0];
       if (f) go(f);
     });
+  }
+
+  /* The card editor's own two boxes, cloned rather than written again here.
+   *
+   * The labels, the 2,000-character cap, the placeholder for a card you grade
+   * yourself and the line naming what Markdown does are one definition, in
+   * index.html, and a second copy of them in this file is a second copy to keep
+   * in step — the sheet would gain a sentence and this screen would quietly
+   * stop saying it. The node itself cannot be borrowed: the shelf opens over a
+   * course whose app.js is loaded and still listening to that sheet, and two
+   * screens driving one form is how a Cancel here closes something over there.
+   * So this takes a copy, renames every id in it, and drops the three parts
+   * that belong to a card that already exists. */
+  function cardBoxes() {
+    const source = document.querySelector('#card-sheet .sheet-card');
+    if (!source) return null;
+    const sheet = source.cloneNode(true);
+    sheet.className = 'imp-own';
+    // The bar is this screen's own heading; the warning is about markup on a
+    // card the course shipped, and nothing has shipped anything yet; and there
+    // is no card to take away before there is a card. The section select goes
+    // because a course of one card has one section and nothing to choose.
+    for (const part of ['.sheet-bar', '#card-warn', '#card-more', '#card-where']) {
+      sheet.querySelector(part)?.remove();
+    }
+    for (const node of sheet.querySelectorAll('[id]')) node.id = 'byo-' + node.id;
+    for (const label of sheet.querySelectorAll('label[for]')) {
+      label.htmlFor = 'byo-' + label.htmlFor;
+    }
+    return sheet;
+  }
+
+  const ownSays = (line) => {
+    const status = body.querySelector('#byo-card-say');
+    if (status) status.textContent = line || '';
+  };
+
+  /** Which of the three boxes a diagnostic is about — the one thing the reader
+   *  cannot know to say, because it is validating a course and not a form. */
+  function boxOf(item) {
+    const path = String((item && item.path) || '');
+    if (/\.back\b/.test(path)) return 'Answer';
+    if (/\.front\b/.test(path)) return 'Question';
+    if (/\.title\b/.test(path)) return 'Name';
+    return '';
+  }
+
+  /* The rest of the reader's own words, in the shape the sheet prints them and
+   * for the same reason: one error is already the whole of the status line
+   * above, and printing it twice under itself is the screen shouting. */
+  function ownDiagnostics(list) {
+    const host = body.querySelector('#byo-card-diags');
+    if (!host) return;
+    const errors = (Array.isArray(list) ? list : [])
+      .filter((item) => item && item.severity === 'error').slice(0, 8);
+    host.hidden = errors.length < 2;
+    host.innerHTML = host.hidden ? '' : errors.map((item) => {
+      const box = boxOf(item);
+      return `<li><code>${esc(item.code || 'error')}</code>
+        <span>${box ? esc(box) + ' — ' : ''}${esc(item.message || '')}</span>
+        <small>${esc(item.correction || '')}</small></li>`;
+    }).join('');
+  }
+
+  function own() {
+    const sheet = cardBoxes();
+    if (!sheet) {
+      fail('the card editor is not on this page',
+        'keep club is part-way through an update. Reload the page and try again.');
+      return;
+    }
+    /* Said before the boxes rather than found out later, and said exactly: the
+       backup file on a deck's Progress screen holds what you have answered and
+       the cards you add to the deck, and no file anywhere holds the deck
+       itself. Offering it as the way to move one would be this screen making a
+       promise the app does not keep — and the promise somebody would rely on
+       just before removing the deck. */
+    body.innerHTML = `<p class="imp-sub">A deck is made by its first card, so this asks for
+      both. A deck you write stays on this device: it does not sync, and no backup file holds
+      the deck itself, so what you write here is written nowhere else.</p>`;
+    body.appendChild(sheet);
+    const form = body.querySelector('#byo-card-form');
+    // Above the two boxes, because the deck is the thing being made and the
+    // card is the first thing in it.
+    form.insertAdjacentHTML('afterbegin',
+      `<label class="sheet-label" for="byo-deck-name">What is this deck called?</label>
+       <input type="text" id="byo-deck-name" maxlength="${DECK_NAME_LEN}"
+         autocomplete="off" spellcheck="false">`);
+    body.querySelector('#byo-card-save').textContent = 'write the first card';
+    body.querySelector('#byo-card-cancel').textContent = 'back';
+    body.querySelector('#byo-card-cancel').addEventListener('click', () => pick(true));
+    form.addEventListener('submit', (e) => { e.preventDefault(); create(); });
+    // Nothing on this screen is reached by accident — it is entered by a press
+    // — so the caret starts in the first box rather than nowhere.
+    body.querySelector('#byo-deck-name').focus();
+  }
+
+  /* Nothing has been written until this succeeds, and a name or a question the
+   * reader will not take stops it before it starts — which is what makes
+   * closing this screen halfway leave no tile behind. */
+  async function create() {
+    const save = body.querySelector('#byo-card-save');
+    if (!save || save.disabled) return;
+    const title = typedIn(body.querySelector('#byo-deck-name'));
+    const front = typedIn(body.querySelector('#byo-card-front'));
+    const back = typedIn(body.querySelector('#byo-card-back'));
+    ownDiagnostics([]);
+    if (!title) {
+      ownSays('A deck needs a name.');
+      body.querySelector('#byo-deck-name').focus();
+      return;
+    }
+    if (!front) {
+      ownSays('A card needs a question.');
+      body.querySelector('#byo-card-front').focus();
+      return;
+    }
+
+    save.disabled = true;
+    ownSays('Writing the deck…');
+    let id = newId();
+    try {
+      // Date.now() alone collided when two tabs finished together, and the
+      // second put simply overwrote the first deck.
+      const taken = new Set((await store.list()).map((d) => d.id));
+      while (taken.has(id)) id = newId();
+    } catch (e) {
+      console.error(e);
+      save.disabled = false;
+      ownSays('This browser will not let keep club store anything: private windows and some '
+        + 'managed browsers block the local database keep club keeps decks in.');
+      return;
+    }
+
+    let read;
+    try {
+      read = await readOwnCourse(id, title, front, back);
+    } catch (e) {
+      console.error(e);
+      save.disabled = false;
+      ownSays('This card could not be read.');
+      return;
+    }
+    if (!read.course) {
+      save.disabled = false;
+      const errors = read.diagnostics.filter((item) => item.severity === 'error');
+      const first = errors[0];
+      const box = first ? boxOf(first) : '';
+      ownSays(first
+        ? `${box ? box + ' — ' : ''}${first.message} ${first.correction}`
+        : 'This card could not be read.');
+      ownDiagnostics(read.diagnostics);
+      return;
+    }
+
+    saving = true;
+    x.disabled = true;
+    /* THE EMPTY MEDIA LIST BELOW IS SAFE HERE AND ONLY HERE. store.put() clears
+     * a deck's whole media range before it writes anything, so handing it [] for
+     * a deck that already holds pictures deletes every one of them. This id was
+     * minted a moment ago and checked against every deck in the database, so the
+     * range being cleared is empty by construction — the creation path is media
+     * safe because there is nothing there yet, not because it is careful. ANY
+     * FUTURE SAVE PATH INTO AN EXISTING DECK MUST CARRY THAT DECK'S MEDIA
+     * THROUGH THIS CALL, or fixing the wording of one card takes the pictures
+     * off the other four hundred. */
+    try {
+      await store.put({
+        id,
+        title,
+        /* No sourceCourseId. That field is what makes a later file say "this is
+         * the same course again, keep your progress", and no file is an update
+         * to a deck somebody wrote here — the only way one can reach it is by
+         * carrying the same name, which is the start-over path and says so
+         * before the button. */
+        importFormat: 'own',
+        created: Date.now(),
+        updated: Date.now(),
+        cards: read.course.cards.length,
+        ids: read.course.cards.map(cardIdentity),
+        art: RAVENS[Math.abs(hash(title)) % RAVENS.length],
+        sectionArt: {},
+        groupArt: {},
+        mediaIndexBySource: {},
+        // The Markdown as it was typed, the way the .keep path stores it: boot
+        // owns the one render pass.
+        deck: read.written,
+      }, []);
+    } catch (e) {
+      console.error(e);
+      // Nothing is in flight any more, so the sheet can be left again — and the
+      // words are still in the boxes, which is the point of failing here.
+      saving = false;
+      x.disabled = false;
+      save.disabled = false;
+      ownSays(/quota|space/i.test(e?.name + e?.message)
+        ? 'There is no room for this deck: the browser is out of space for this site. '
+          + 'Removing a deck you no longer study will free it.'
+        : `The deck could not be saved: ${e?.message || String(e)}`);
+      return;
+    }
+    saving = false;
+    x.disabled = false;
+    madeId = id;
+    made(id, title);
+  }
+
+  /* What just happened, and the one thing worth knowing next.
+   *
+   * The importer's other paths go straight into the deck, because a file you
+   * have read a receipt for is a deck you have already decided about. A deck of
+   * one card is not: the next thing a person does is write the second card, and
+   * this is the only screen there is to say where that lives. */
+  function made(id, title) {
+    body.innerHTML = `<h2 class="imp-h" tabindex="-1">${esc(title)}</h2>
+      <p class="imp-sub">one card, written to this device</p>
+      <div class="imp-book">
+        <h3>what happens now</h3><ul>
+          <!-- No <b> anywhere but the empty leading one: .imp-book li.said b is
+               hidden, which is what keeps the numbered column lined up, and an
+               emphasised word inside one of these lines would simply not be
+               there. -->
+          <li class="said"><b></b><span>Browse is where you write the next card, and every
+            card after it — “Write a card” is at the top of the list</span></li>
+          <li class="said"><b></b><span>a deck you wrote does not sync, and this device is
+            the only place it exists — Progress → export a backup keeps what you have
+            answered and the cards you add next, not the deck</span></li>
+          <li class="said"><b></b><span>removing it from the courses screen takes the deck,
+            what you have answered and every card in it</span></li>
+        </ul>
+      </div>
+      <div class="imp-acts">
+        <button type="button" class="go" data-open>start studying</button>
+        <button type="button" data-shelf>back to your decks</button>
+      </div>`;
+    body.querySelector('.imp-h').focus();
+    body.querySelector('[data-open]').addEventListener('click', () => enter(id));
+    body.querySelector('[data-shelf]').addEventListener('click', () => close(false));
   }
 
   // A page-wide drop target: aiming at a dashed rectangle with a file in hand
@@ -358,6 +722,11 @@ export function openImporter() {
         'private windows and some managed browsers block the local database keep club keeps decks in.');
       return;
     }
+    // What the person has written into the deck this file would replace. Read
+    // here rather than inside the receipt, which renders and does not go
+    // looking: the count is a fact about the device, and the receipt's job is
+    // to say it.
+    if (existing) existing.written = writtenInto(existing.id);
     body.innerHTML = receiptHtml(built.receipt, existing);
     body.querySelector('.imp-h').focus();
     body.querySelector('[data-cancel]').addEventListener('click', () => close(false));
@@ -373,6 +742,17 @@ export function openImporter() {
    * replace silently wipes the lot. Match on the cards, and say which it is. */
   function match(decks, built) {
     const mine = new Set(built.course.cards.map(cardIdentity).filter(Boolean));
+    /* Never a deck somebody wrote here. Both rulings about replacing are about
+     * a deck a file could be another copy of: the same deck again keeps the
+     * layer, a different deck under the same name takes it and starts over. A
+     * deck of your own carries no sourceCourseId — no file is an update to one
+     * — so it could only ever land on the second, which deletes the deck's own
+     * document along with the layer. That document is the cards themselves, and
+     * nothing puts it back: the backup file is per-course and holds the history,
+     * the notes and the layer, never the deck. A file that merely shares its
+     * name is a different deck, and a different deck is a second row.
+     */
+    decks = decks.filter((deck) => deck.importFormat !== 'own');
     const identified = decks.filter((deck) =>
       deck.sourceCourseId && deck.sourceCourseId === built.sourceCourseId);
     if (identified.length) {
@@ -465,18 +845,33 @@ export function openImporter() {
         localStorage.setItem(globalThis.MUNIN.resetKey(id),
           Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
         localStorage.removeItem(globalThis.MUNIN.stateKey(id));
+        // The layer goes with the history, and only here. Its records are keyed
+        // by the OLD deck's card ids, so what would be left of it over a deck of
+        // different cards is edits that override nothing and cards written into
+        // a deck that is not on this device any more. The same replace onto the
+        // same deck keeps both, which is the whole point of an override
+        // surviving a course update. The line above the button says which of
+        // the two this one is before it is pressed.
+        localStorage.removeItem(globalThis.MUNIN.cardsKey(id));
         globalThis.MUNIN.abandonState?.(id);
       } catch (e) {
         saving = false;
         x.disabled = false;
         fail('the deck was replaced, but its old progress could not be cleared',
-          'device storage is blocked. Reload, then use Progress → erase review history before studying it.');
+          'device storage is blocked. Reload, then use Progress → erase review history before studying it.'
+          + (replacing.written
+            ? ' The cards you wrote into the old deck are still on this device too, to keep or to delete.'
+            : ''));
         return;
       }
     }
-    // The deck you just imported is the one you meant to study. Go through the
-    // shell so Back lands on the picker, while retaining the deep-link fallback
-    // for an older shell or a blocked resume-pointer write.
+    enter(id);
+  }
+
+  // The deck you just imported, or just wrote, is the one you meant to study.
+  // Go through the shell so Back lands on the picker, while retaining the
+  // deep-link fallback for an older shell or a blocked resume-pointer write.
+  function enter(id) {
     try {
       if (typeof globalThis.MUNIN.enter === 'function') {
         globalThis.MUNIN.enter(id);
