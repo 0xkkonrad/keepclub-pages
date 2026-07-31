@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: 'fef58a42e4', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': 'd068d09220', 'git-101': 'cac1f1b343' } };
+const BUILD = { shell: 'fef58a42e4', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': 'd068d09220', 'git-101': '9e570c7079' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
