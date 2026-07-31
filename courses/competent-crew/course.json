@@ -5,7 +5,7 @@
  "tagline": "practical crew deck",
  "accent": {
   "light": "#33608d",
-  "dark": "#7fb2e8",
+  "dark": "#a9cdf3",
   "inkLight": "#fffdf7",
   "inkDark": "#141519"
  },
@@ -44,7 +44,7 @@
   "flag",
   "compass"
  ],
- "notice": "Revision material, not a substitute for the course or for time on the water. Progress stays here unless you turn on Sync.",
+ "notice": "Revision material, not a substitute for the course or for time on the water.",
  "figures": {
   "noPen": [
    "f-sail",

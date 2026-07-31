@@ -87,16 +87,21 @@
   color-scheme: light;
 }
 
-/* Text size, four steps, written by applyFontSize() in app.js. Steps rather
+/* Text size, five steps, written by applyFontSize() in app.js. Steps rather
    than a slider: the point is legibility, not typography, and a person picking
-   between four names cannot land on a size that breaks the layout. Declared as
+   between five names cannot land on a size that breaks the layout. Declared as
    attribute overrides for the same reason the theme is — the stylesheet is
    parsed before any script runs, so the sizes have to already be here for the
-   attribute to mean anything on the first frame. */
-:root[data-font="small"] { --font-px: 13px; }
+   attribute to mean anything on the first frame.
+   The scale runs up from the size the app is drawn at rather than down to it:
+   13px was smaller than anything else in the app, and the far end is 23 rather
+   than 19. A save holding the step that went is read back as `default`, which
+   is the smallest there is now — the sanitiser in app.js does it for free. */
 :root[data-font="default"] { --font-px: 15px; }
 :root[data-font="large"] { --font-px: 17px; }
 :root[data-font="xlarge"] { --font-px: 19px; }
+:root[data-font="huge"] { --font-px: 21px; }
+:root[data-font="biggest"] { --font-px: 23px; }
 
 /* There is no prefers-color-scheme block, on purpose. Munin's default is LIGHT,
  * not the device's setting (28 July 2026): the app is drawn — paper, ink and a
@@ -123,6 +128,11 @@
   --text: #f1efe8; --muted: #a6a7b2; --accent: #35917f; --accent-ink: #141519;
   --g1: #ff8a75; --g2: #f0b64a; --g3: #5ed49a; --g4: #35917f; --warn: #f0b64a;
   --fig-blu: #6fb2ff;
+  /* The hard offset shadow is the app's signature, and here it is cast in the
+     same near-white as --stroke, so every border simply looks thicker on one
+     side. Ink, not paper: a shadow is the one thing on a dark screen that is
+     darker than the page. */
+  --sh: 4px 4px 0 #000; --sh-sm: 3px 3px 0 #000;
   /* Darker and more opaque than the light theme's: the page behind it is
      already dark, so it takes more to read as "that is not the thing you are
      using now" and there is no bright paper left for it to soften. */
@@ -177,15 +187,15 @@ html, body {
 .pull-refresh.refreshing .pull-refresh-icon { animation: pull-refresh-spin .8s linear infinite; }
 @keyframes pull-refresh-spin { to { transform: rotate(360deg); } }
 
+/* Two roots, not three: the `courses` pill used to be a fixed child of <body>
+ * with a translate of its own, and it rides inside #app now. */
 body.pull-refresh-active #app,
-body.pull-refresh-active > .shelf,
-body.pull-refresh-active > .shelf-btn {
+body.pull-refresh-active > .shelf {
   transform: translateY(var(--pull-refresh-distance, 0px));
   transition: transform .2s ease;
 }
 body.pull-refresh-dragging #app,
-body.pull-refresh-dragging > .shelf,
-body.pull-refresh-dragging > .shelf-btn {
+body.pull-refresh-dragging > .shelf {
   transition: none;
 }
 
@@ -229,7 +239,7 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   gap: 4px; color: var(--accent);
   padding: calc(10px + env(safe-area-inset-top)) 20px 0;
   /* The height is held at what an unshrunk row costs, so that narrowing the
-     screen cannot pull the header up under the pill. */
+     screen cannot pull the header up into the drawings. */
   min-height: calc(32px + env(safe-area-inset-top));
 }
 /* The line the drawings stand on, written by friezeRule(). Inset by the
@@ -246,17 +256,11 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .frieze-rule path {
   fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round;
 }
-/* Both end before the fixed `courses` pill, which is pinned to this same corner
-   and covered four of the ten drawings at 320 — a ten-slot progress row that
-   read as six. Only while the row reaches the right-hand edge of the screen:
-   past 900px the header is centred in 680 and the pill is well clear of it, and
-   insetting there would leave the frieze stopping short of the title. */
-@media (max-width: 900px) {
-  .frieze { padding-right: 120px; }
-  .frieze-rule { right: 120px; }
-}
-/* Ten drawings have to fit inside a 320px screen without a sideways scrollbar,
-   which is what sets this size rather than taste. */
+/* This row and the line under it used to end 130px short of the right edge,
+   because a `courses` pill fixed to this same corner covered four of the ten
+   drawings at 320 — a ten-slot progress row that read as six. The pill stands
+   in the header now, under the frieze rather than on it, so both run the full
+   width of the screen again. */
 /* The drawing arrives with a hop and then settles into a breath: the entrance
    plays once, the idle plays forever, and one element carries both. Two
    animations on one element do not blend — the later one in the list simply
@@ -267,10 +271,12 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
    with two animations, one inline delay would set both of them and the idle
    would start before the hop had finished. */
 .frieze .dood {
-  /* They shrink to fit whatever is left beside the pill rather than running
-     under it, and stay square as they do — a drawing whose feet leave the line
-     it is standing on is the one thing this row must not do. Flex-shrink, not
-     an arithmetic width, because how many drawings there are is the course's. */
+  /* Ten drawings have to fit inside a 320px screen without a sideways
+     scrollbar, which is what sets this size rather than taste. They shrink to
+     whatever the row can spare and stay square as they do — a drawing whose
+     feet leave the line it is standing on is the one thing this row must not
+     do. Flex-shrink, not an arithmetic width, because how many drawings there
+     are is the course's. */
   flex: 0 1 22px; min-width: 0; width: 22px; height: auto; aspect-ratio: 1;
   transform-origin: 50% 100%;              /* a creature with feet stays on them */
   animation: hop-in .95s ease-out both,
@@ -284,8 +290,18 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
    `unearned`, not `ghost` — `.ghost` is already the secondary-button style, and
    a frieze of ten outlined buttons is what that collision looks like. */
 .frieze .unearned { opacity: .22; animation: none; }
+/* Charm has to survive the second theme. A 1.4 pen at 22% on near-black is not
+   a faint drawing, it is no drawing, and the ground line under it went with it —
+   the one piece of the app whose whole job is to be liked was the one piece that
+   did not cross over. A heavier pen, a berth you can still see is empty, and a
+   line the drawings are visibly standing on. */
+:root[data-theme="dark"] .frieze .doodle { stroke-width: 1.7; }
+:root[data-theme="dark"] .frieze .unearned { opacity: .4; }
+:root[data-theme="dark"] .frieze-rule { opacity: .8; }
 /* Home's header sits under the frieze rather than under the status bar, so it
-   keeps its own smaller inset — with the same 8px the pill costs everywhere. */
+   keeps its own smaller inset. Browse and Progress used to carry 66px here to
+   clear a `courses` pill fixed to the window; the pill stands in the header
+   now, so there is nothing to clear and they take the ordinary inset. */
 #s-home .top { padding-top: 18px; }
 
 /* The entrance. This is a hop re-cut to be played once: the version that used
@@ -333,13 +349,32 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .top {
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 12px;
-  /* 28, not 20: the fixed `courses` pill is 48px tall and pinned to this
-     corner, and at 20 it clipped the top of the theme button beside it. */
-  padding: calc(28px + env(safe-area-inset-top)) 20px 16px;
+  padding: calc(22px + env(safe-area-inset-top)) 20px 16px;
 }
+/* The corner. Both controls on one axis, in the header's own flow: `courses`
+   was fixed to the window and the settings mark sat under it, so the corner
+   was two chips floating over whatever had scrolled beneath them, on two
+   different rows, belonging to nothing. They are one pair of header controls
+   now, and the header is what holds them apart from the title. */
+.top-acts { flex: none; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* The title gives way first and the pair drops under it last. Two controls
+   cost the row about 150px, and at the largest text size a one-word heading
+   and that pair do not both fit across a 320px phone: the title column is
+   allowed to shrink to its longest word, and only when even that will not fit
+   does the pair take a line of its own — still one row, still one axis, just
+   under the title rather than beside it. Shrinking is tried first, which is
+   why the column's basis is 0 rather than its content: at the size the app is
+   drawn at nothing here ever wraps. Not the study header, which is a back
+   arrow and a progress bar and has nothing to drop. */
+.top:not(.study-top) { flex-wrap: wrap; }
+.top:not(.study-top) > div:first-child { flex: 1 1 0; max-width: 100%; }
 .top h1 {
   margin: 0; font-size: 1.5rem; font-weight: 500; letter-spacing: -.03em;
-  text-transform: lowercase;
+  /* A deck is named by whoever built it, and one named in a single unbroken
+     string used to run off the side of the screen. `break-word` rather than
+     `anywhere`: `anywhere` lets the column shrink below its longest word, and
+     "progress" came back as "progres / s". */
+  text-transform: lowercase; overflow-wrap: break-word;
 }
 .top h1.own { text-transform: none; }
 .sub { margin: 4px 0 0; color: var(--muted); font-size: .8rem; text-transform: lowercase; }
@@ -357,9 +392,26 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
    taken from the button rather than from `.dood`'s accent, so the toggle stays
    the quiet grey it has always been and still lights up on hover. */
 .icon-btn .dood.dood-glyph { width: 21px; height: 21px; color: inherit; }
+/* The settings mark is drawn in the markup rather than built by a script, so
+   the header is complete before app.js has run. Same box as the glyph above,
+   same grey, and it inherits the button's colour on hover. */
+.icon-btn .mark { width: 21px; height: 21px; display: block; }
 .icon-btn:disabled { opacity: .35; }
 .icon-btn:active:not(:disabled) { background: var(--surface-2); color: var(--text); }
 @media (hover: hover) { .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); } }
+/* The one control in the header corner that is not a word, and unchipped it
+   read as a stray glyph rather than something to press: three short rules and
+   three handles look a lot like a typographic mark that failed to render. The
+   `courses` pill it now stands beside is paper, 2px ink and a hard shadow, so
+   this is too — same round end, same height, one row (munin.js's SHELF_CSS
+   holds the other half). */
+.setup-btn.icon-btn {
+  background: var(--surface); color: var(--text);
+  border: var(--bw) solid var(--stroke); border-radius: 99px;
+  box-shadow: var(--sh-sm);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.setup-btn.icon-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
 
 .nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
@@ -376,17 +428,31 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   color: var(--muted); font-size: .82rem; text-transform: lowercase;
 }
 .nav button span { display: none; }
-.nav button.on { color: var(--accent); font-weight: 500; }
-.nav button.on::before {
-  content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-  width: 28px; height: 3px; background: var(--accent);
+/* The mark belongs to the word, not to the rule above it. Sat at the top of the
+   button it landed 2px under the nav's own border and read as a notch cut out
+   of it — damage, not an indicator — and at a fixed 28px it was narrower than
+   most of the labels it was meant to be marking. It is the label's own
+   underline now: exactly as wide as the word, sitting under it, in the ink the
+   word is already in, and it costs the nav no geometry to draw. */
+.nav button.on {
+  color: var(--accent); font-weight: 500;
+  text-decoration: underline; text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
 }
 .nav[hidden] { display: none; }
 
 /* ── home ────────────────────────────────────────────────────────── */
 
 .today { padding: 0; margin-bottom: 28px; }
-.today-counts { display: flex; gap: 22px; margin-bottom: 18px; flex-wrap: wrap; }
+/* Three figures across, and at Extra large they do not fit across: as a wrapping
+   flex row the third one dropped to a line of its own with a 200px hole beside
+   it, which reads as a fourth figure that failed to load. A grid that takes as
+   many columns as will hold a figure lands them 3 / 2 / 1 with the gap shared
+   out, and the row is square at every text size. */
+.today-counts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
+  gap: 14px 18px; margin-bottom: 18px;
+}
 .today-counts div { line-height: 1.2; }
 .today-counts b {
   display: block; font-size: 2rem; font-weight: 500; color: var(--accent);
@@ -449,7 +515,25 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   flex: none; font-size: .72rem; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-#section-list > .h-part:first-child, #mastery > .h-part:first-child { margin-top: 4px; }
+#section-list > .h-part:first-child, #mastery > .h-part:first-child,
+#section-list > .part:first-child > .h-part { margin-top: 4px; }
+
+/* One disclosure, and the app uses it everywhere it groups a list under a
+   themed heading — Home's seven themes and the same seven on the Browse index.
+   The heading is the summary, the count it already carried is the badge, and
+   the +/− is the one #how has used since the beginning. Four screens each
+   inventing their own scroll is what this replaces. */
+details.part > summary { list-style: none; cursor: pointer; }
+details.part > summary::-webkit-details-marker { display: none; }
+details.part > summary::after {
+  content: "+"; flex: none; margin-left: 2px; line-height: 1;
+  color: var(--accent); font-size: 1.1rem;
+}
+details.part[open] > summary::after { content: "\2212"; }
+/* A heading you press is a target, so it is thumb-sized whatever the type is
+   doing. Centred rather than on the baseline, because the row is now taller
+   than the words in it. */
+details.part > summary.h-part { align-items: center; min-height: var(--tap); }
 /* The section rows already rule themselves off top and bottom. Under a heading
    that carries its own dotted rule that is two lines of dots, three pixels
    apart, which reads as a mistake. */
@@ -496,11 +580,24 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .fineprint { color: var(--muted); font-size: .78rem; line-height: 1.65; margin: 28px 0 0; }
 
 .ask-exam {
+  position: relative;
   border: var(--bw) solid var(--stroke); border-radius: var(--r);
   background: var(--surface); box-shadow: var(--sh);
   padding: 18px; margin-bottom: 24px;
 }
-.ask-exam h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 500; letter-spacing: -.02em; text-transform: lowercase; }
+/* The dismissal, in the corner every other dismissal in this app is in. Out of
+   the flow rather than in it: the block asks one question, and a control on a
+   line of its own is a second thing to read before you can answer it. It keeps
+   the app's 48px target by hanging over the card's own padding, which is why
+   the heading beside it is given room to stop. */
+.ask-x {
+  position: absolute; top: 5px; right: 5px;
+  color: var(--muted); font-size: 1rem;
+}
+.ask-exam h2 {
+  margin: 0 0 8px; padding-right: 40px;
+  font-size: 1.05rem; font-weight: 500; letter-spacing: -.02em; text-transform: lowercase;
+}
 .ask-exam p { margin: 0 0 16px; font-size: .84rem; line-height: 1.6; color: var(--muted); }
 .ask-exam input[type=date] {
   width: 100%; min-height: var(--tap); padding: 0 12px;
@@ -508,7 +605,9 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   border-radius: var(--r-sm); font-size: 1rem;
 }
 .ask-parsed { margin: 10px 0 0 !important; font-weight: 500; color: var(--text) !important; }
-.ask-exam .link-btn { padding-left: 0; }
+/* Nothing typed, nothing read back, and nothing to leave a 10px gap under the
+   date field. */
+.ask-parsed:empty { display: none; }
 
 .how { margin-top: 24px; border-top: 2px dotted var(--line); }
 .how summary {
@@ -526,22 +625,15 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .key span { display: flex; align-items: center; gap: 6px; }
 .key i { width: 12px; height: 8px; border: 1px solid var(--stroke); display: block; }
 
-.grade-ask {
-  /* The gap under it is padding, not margin: with the grade row out of the flow
-     a margin here collapses with the dock foot's, and the dock is 8px shorter
-     while the question is up than it is once the answer needs the room. */
-  max-width: 62ch; margin: 0 auto; padding-bottom: 10px; text-align: center;
-  font-size: .76rem; color: var(--muted); text-transform: lowercase;
-}
-/* Held empty rather than added on reveal, which is why it hides with a class
-   and not with `hidden`: this line arrives at the exact moment the answer needs
-   the room, and a dock that grows by its height takes that room from the card —
-   138px to 170px, which is 44% of a phone held sideways. */
-.grade-ask.away { visibility: hidden; }
-/* Except where there is nothing to hold it in. On a short screen the band is a
-   twelfth of the window, and four labelled buttons ask the question themselves. */
+/* #grade-ask is spoken, never drawn — it carries `sr` in the markup and has no
+   rules of its own here. It used to be a visible line held empty by
+   `.grade-ask.away { visibility: hidden }` so that arriving on reveal could not
+   grow the dock and take 28px from the card. Out of the flow in both states,
+   the growth it was reserving against cannot happen, and the four labelled
+   buttons were always the question. Anything that puts the line back on screen
+   has to put `.away` back with it, and 28px of dock with that. */
+
 @media (max-height: 620px) {
-  .grade-ask { display: none; }
   .study-top {
     padding: calc(8px + env(safe-area-inset-top)) 12px 6px;
   }
@@ -561,6 +653,10 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   font-size: .84rem; line-height: 1.6; color: var(--muted);
 }
 .banner b { color: var(--text); font-weight: 500; }
+/* Inside a sentence, so it takes the sentence's line and none of its own: the
+   48px floor every other link in the app stands on would have made this
+   paragraph a box with a button in it. */
+.banner-link { min-height: 0; padding: 0; font-size: inherit; }
 .banner.tight { border-color: var(--warn); }
 .banner.tight b { color: var(--warn); }
 
@@ -804,10 +900,13 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 @keyframes revealIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+/* Outline and muted ink, like every other quiet label. "New" is not a warning,
+   and it was the only yellow object on the best screen in the app. --flag is
+   still the flag colour: the search highlight and the clip bar wear it. */
 .chip {
   display: inline-block; padding: 3px 10px;
   border: var(--bw) solid var(--stroke); border-radius: 9px;
-  background: var(--flag); color: #121214;
+  background: var(--surface); color: var(--muted);
   font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
 }
 .chip.warn { background: var(--surface); color: var(--warn); border-color: var(--warn); }
@@ -819,6 +918,15 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 #answer-wrap { animation: revealIn .22s ease-out both; }
 .answer { font-size: 1.02rem; line-height: 1.65; color: var(--muted); }
 .answer b { font-weight: 500; color: var(--accent); }
+/* No ring on the answer. reveal() puts focus here so the block is read out and
+   so Tab carries on from it — the browser cannot tell that from a keyboard user
+   landing on a control, and paints the focus ring either way, so every card
+   ended with a rounded ink-blue box around its answer, on a phone with no
+   keyboard, and the answer read as something you were meant to type in. It is
+   the loudest rectangle on a screen whose job is to be quiet, and it is not a
+   control. What the keyboard needs here is announcement and a place to Tab from,
+   and it still has both: #answer-wrap is the live region. */
+#card-a:focus, #card-a:focus-visible { outline: none; }
 
 .fig { margin: 22px 0 0; }
 .fig-btn {
@@ -828,7 +936,12 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 }
 .fig-btn:active { transform: translate(3px, 3px); box-shadow: none; }
 .fig-btn img { display: block; width: 100%; height: auto; }
-.fig figcaption { margin-top: 8px; font-family: var(--hand); font-size: .82rem;
+/* The one line in the app set in the handwriting face, and that face hangs its
+   descenders lower than the mono does: at the body's own 1.55 the y and the p on
+   a second line were sliced by the bottom of the box. Room measured in lines
+   plus a little under them, rather than a height in pixels the type has to fit. */
+.fig figcaption { margin-top: 8px; padding-bottom: 4px;
+  font-family: var(--hand); font-size: .82rem; line-height: 1.75;
   color: var(--muted); text-align: center; }
 .fig-missing {
   margin: 18px 0 0; padding: 12px 14px; font-size: .82rem; line-height: 1.55;
@@ -883,33 +996,45 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 .link-btn:disabled { opacity: .4; text-decoration: none; }
 
 .keyhint { display: none; margin: 12px 0 0; text-align: center; font-size: .72rem; color: var(--muted); text-transform: lowercase; }
-@media (hover: hover) and (pointer: fine) { .keyhint { display: block; } }
+/* Both places the keyboard is documented follow the same rule, so they never
+   both turn up: on a phone neither of them is about anything you have. */
+#about-shortcuts { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .keyhint, #about-shortcuts { display: block; }
+}
 
 /* ── video ───────────────────────────────────────────────────────── */
 
 .vids { margin: 20px 0 0; }
-.vhead { margin: 0 0 8px; font-size: .74rem; letter-spacing: .08em;
-  text-transform: lowercase; color: var(--muted); }
+/* The heading is the app's own section idiom, the same one the rest of the
+   card uses. It used to be a label of its own invention. */
+.vhead { margin: 20px 0 10px; }
 .vrow { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* The poster is the clip's own first second, not a 54th image asset —
-   preload="metadata" costs tens of KB, not the whole video. */
+   preload="metadata" costs tens of KB, not the whole video.
+   Small, and framed the way everything else here is framed. Two full-colour
+   photographic rectangles under a hand-drawn ink diagram won a fight they had
+   no business being in: the loudest pixels in the app sat next to its best
+   drawing. The clips stay; they stop shouting. */
 .vthumb {
-  position: relative; flex: 0 0 auto; width: 108px; padding: 0;
+  position: relative; flex: 0 0 auto; width: 96px; padding: 0;
   border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
-  background: #000; overflow: hidden; box-shadow: var(--sh-sm);
+  background: #000; overflow: hidden; box-shadow: var(--sh);
   transition: transform .08s ease, box-shadow .08s ease;
 }
-.vthumb:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
-.vthumb video { display: block; width: 100%; height: 150px; object-fit: cover; pointer-events: none; }
+.vthumb:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--stroke); }
+.vthumb video { display: block; width: 100%; height: 96px; object-fit: cover; pointer-events: none; }
 .vthumb .vplay {
   position: absolute; inset: 0; display: grid; place-items: center;
-  color: #fff; font-size: 1.5rem; text-shadow: 0 1px 6px rgba(0, 0, 0, .7);
+  color: #fff; font-size: 1.3rem; text-shadow: 0 1px 6px rgba(0, 0, 0, .7);
 }
+/* Muted ink on the app's own paper. A running time is not a warning, and it was
+   the only yellow object within reach of the drawing. */
 .vthumb .vlen {
-  position: absolute; left: 5px; bottom: 5px;
-  background: var(--flag); color: #121214;
-  border: 1.5px solid #121214; border-radius: 5px;
+  position: absolute; left: 4px; bottom: 4px;
+  background: var(--surface); color: var(--muted);
+  border: var(--bw) solid var(--stroke); border-radius: 5px;
   font-size: .6rem; padding: 0 5px; font-variant-numeric: tabular-nums;
 }
 
@@ -994,15 +1119,47 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
   background-position: calc(100% - 18px) 21px, calc(100% - 13px) 21px;
   background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
 }
-/* The native ✕ in a type=search field is a four-pixel-wide target that clears
-   the text and leaves the section filter set, next to a labelled button that
-   says what it will undo. One of them had to go. */
-#search::-webkit-search-cancel-button { display: none; }
+/* The native ✕ is left where the browser draws it: it clears the field it sits
+   in, which is a reset next to the thing it resets. It used to be suppressed in
+   favour of a labelled Clear a row further down, and that button is now kept
+   only for the one case the ✕ cannot do — a search AND a section filter set at
+   once, where clearing the text alone leaves you looking at a narrowed deck. */
 
 .result-count { margin: 2px 0 0; font-size: .78rem; color: var(--muted); }
 .result-count.nothing { color: var(--text); font-size: .86rem; margin-top: 4px; }
-.browse-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+/* A dead end, drawn on. One of the deck's own creatures, big and quiet, with
+   the offer to widen the search sitting above it rather than floating in four
+   hundred pixels of nothing. */
+.browse-empty { margin: 26px 0 0; text-align: center; }
+.browse-empty .dood { width: 84px; height: 84px; opacity: .5; }
+/* One ranked line: where you are, then the one thing worth doing from here.
+   The floor holds the line's height still while its contents swap — the
+   breadcrumb and the offer give way to a single "clear search and filter" as
+   soon as you type, and without it the whole page under this row jumped. */
+.browse-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.browse-acts:has(> :not([hidden])) { min-height: var(--tap); }
 .browse-acts .link-btn { padding-left: 0; padding-right: 0; }
+#browse-study, #browse-clear, #browse-wide { margin-left: auto; }
+/* Where you are gets the line. Sharing it with "study this section →" — a
+   bordered, hard-shadowed pill that cannot shrink and will not wrap — left the
+   breadcrumb 45% of a phone row and cut a theme name mid-word: two controls of
+   wildly different weight on one line, and the light one lost. It still gives
+   up its ending rather than the line if a name is long enough to need to. */
+#browse-back {
+  flex: 1 0 100%; min-width: 0; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#browse-study { flex: none; padding: 0 13px; font-size: .78rem; }
+/* The one that is a sentence rather than a label takes its own row: it only
+   turns up in the empty state, where it is the only offer on the screen. */
+#browse-wide { flex: 1 0 100%; margin-left: 0; text-align: left; }
+/* The list's own header: the count, and the toggle that acts on all of it. */
+.browse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.browse-head .link-btn { flex: none; padding: 4px 0; min-height: 32px; font-size: .74rem; }
+/* Under the list, not over it. Both of these are things you do once you have
+   read something, and the list of cards you hid opens directly beneath them. */
+.browse-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 18px; }
+.browse-foot .link-btn { padding-left: 0; padding-right: 0; }
 
 /* ── the browse index ──
    Twenty-four sections in seven themes, each marked with the drawing it already
@@ -1144,6 +1301,34 @@ mark {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px;
   margin: 6px 0 4px; font-weight: 400;
 }
+/* Where a row has nothing to say for itself, Edit goes in the row's own right
+   gutter beside the chevron instead of taking a line under every card you came
+   here to read. A row carrying a layer notice keeps its line — the notice is a
+   sentence, not a label.
+
+   Taken out of the flow rather than given a grid column of its own: as a column
+   it was reserved down the whole height of the row, so opening a card handed
+   the answer, the diagram and the caption 291px inside dotted rules that ran to
+   355 — a ragged right edge on the one screen where the drawing wants the width.
+   Absolute, the gutter is only paid for by the line it stands on, and it is the
+   closed summary that pays it. Nothing renests either way: the JS that walks
+   these rows still finds <details> as a direct child of the <li>. */
+/* One axis for both of a row's controls, too. Edit was pinned to the top of the
+   row while the chevron beside it was centred in the summary, so on a one-line
+   row they were 5px apart, on a wrapped one 16px, and in search results 46px —
+   two controls for the same card that never once lined up. Both are set against
+   the first line of the summary now, which is the line that does not move: 14px
+   is the summary's own top padding and 6px is the link's, so the two pieces of
+   text start level whether the title runs to one line or four. */
+#browse-list li { position: relative; }
+#browse-list li > .b-acts.bare {
+  position: absolute; top: 8px; right: 0; margin: 0;
+}
+.browse-list summary { align-items: flex-start; }
+/* And the gutter is reserved on that line alone, so a title cannot run under
+   Edit while everything the row opens keeps the full width. */
+#browse-list li:has(> .b-acts.bare) > details > summary,
+#browse-list li:has(> .b-acts.bare) > .browse-prompt { padding-right: 50px; }
 .b-mine { flex: 1 1 100%; font-size: .72rem; color: var(--muted); }
 /* The one line here that is a decision rather than a label. Warn, not the
    accent: the accent is what the app uses to point at things you asked for. */
@@ -1174,6 +1359,10 @@ mark {
   letter-spacing: -.04em; font-variant-numeric: tabular-nums;
 }
 .tile span { font-size: .74rem; line-height: 1.5; color: var(--muted); display: block; margin-top: 2px; }
+/* The repeat-card record, once there is one. A line rather than two more tiles:
+   a tile whose whole content is "n/a — not enough data yet" is an apology in a
+   grid, and the other one said the same thing from the other side. */
+.stat-say { margin: 12px 0 0; font-size: .76rem; color: var(--muted); }
 
 .moment-card {
   position: relative; overflow: hidden;
@@ -1202,25 +1391,54 @@ mark {
   min-height: 1.2em; margin: 8px 0 0; color: var(--muted);
   font-size: .68rem; line-height: 1.4;
 }
+/* The card's own record of the three figures it was drawn from, and not a
+   second printing of them: the sentence directly above already says all three
+   in words, and the tiles at the top of the screen say them a third time. One
+   rendering per screen, so this one is kept and not drawn. */
 .membership-stats {
-  display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 13px 0 14px;
+  display: none;
+  flex-wrap: wrap; gap: 8px 14px; margin: 13px 0 14px;
   color: var(--muted); font-size: .7rem;
 }
 .membership-stats b { color: var(--text); font-size: .85rem; font-weight: 500; }
 
+/* No rule under it. The seven columns were 108px tall and their contents 110,
+   so the day names hung a few pixels past the bottom of the block and the
+   dotted axis was drawn straight through them: the words came out strung along
+   a decorative dotted line, trapped in it rather than labelling anything. The
+   bars stand on the row of stubs, which is the only baseline a bar chart with
+   an outlined bar has ever needed. */
 .forecast {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
-  align-items: end; height: 108px;
-  border-bottom: 2px dotted var(--line); padding: 4px 0 8px;
+  align-items: end; height: 124px;
+  padding: 4px 0 8px;
 }
-.fc-col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 5px; }
+/* As tall as the column's own contents, not as tall as the block: at 100% the
+   flex box was shorter than what it held and the day name spilled out of the
+   bottom of the chart. The grid's `align-items: end` is what stands them on
+   one line, and it cannot stand them past it. */
+.fc-col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
 .fc-n { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .fc-bar {
   width: 100%; min-height: 3px; background: var(--accent);
   border: var(--bw) solid var(--stroke); border-radius: 4px 4px 0 0;
 }
-.fc-bar.empty { background: var(--surface-2); }
+/* A day with nothing due is nothing, and it has to look like nothing. Given the
+   bar's own 2px outline a three-pixel stub came out as a solid black slab
+   sitting on the axis, so six empty days and one real one read as a chart that
+   had failed to load rather than as one Saturday. A faint stub instead: enough
+   to say the day is in the row, not enough to be mistaken for a reading. */
+.fc-bar.empty {
+  background: var(--line); border: 0; border-radius: 0;
+  min-height: 0; height: 2px;
+}
 .fc-d { font-size: .66rem; color: var(--muted); }
+/* Seven stubs of nothing under an axis is a chart with no reading in it. The
+   element stays — it is the labelled role="img" — and says the reading out. */
+.forecast.none {
+  display: block; height: auto; align-items: initial;
+  font-size: .8rem; line-height: 1.6; color: var(--muted);
+}
 
 .mastery { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .mastery li { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; font-size: .86rem; }
@@ -1255,12 +1473,21 @@ mark {
 /* Locked ones stay drawn rather than blanked out — a row of question marks
    tells you nothing about what is worth doing next. */
 .ach li.locked { box-shadow: none; border-style: dashed; opacity: .55; background: none; }
+/* The rungs you are not on next. display:none rather than visibility: they are
+   still in the list, because the sentence above it counts them and a share
+   button on an earned row is never folded away — but containTab() decides what
+   is a tab stop by getClientRects(), and a folded row must not be one. */
+.ach.folded li.locked:not(.next) { display: none; }
 .ach .dood { width: 30px; height: 30px; color: var(--accent); }
 .ach li.locked .dood { color: var(--muted); }
 .ach .a-txt { min-width: 0; flex: 1; }
 .ach b { display: block; font-size: .8rem; font-weight: 500; text-transform: lowercase; }
 .ach small { display: block; font-size: .68rem; color: var(--muted); line-height: 1.4; }
 .ach-count { margin: -4px 0 14px; font-size: .76rem; color: var(--muted); }
+/* The same weight as "write a card", because it is the same offer: show me the
+   rest of a list I have finished reading. Full width with a hard shadow it was
+   the loudest thing on Progress, sitting under the quietest. */
+#ach-more { margin-top: 12px; }
 .share-mini {
   flex: none; min-height: var(--tap); padding: 5px 8px;
   border: 1px solid var(--stroke); border-radius: var(--r-sm);
@@ -1272,9 +1499,10 @@ mark {
    bottom it sat directly over Show answer and the four grade buttons. */
 .unlock {
   position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top));
-  /* Above the `courses` pill at 80, which shares this top inset and was drawn
-     inside the card — cutting its border, its corner and its shadow. Still
-     under the loading screen at 95. */
+  /* Over the screen it lands on, and still under the loading screen at 95. It
+     used to have to outrank a `courses` pill fixed at 80 that shared this top
+     inset and was drawn inside the card, cutting its border, its corner and
+     its shadow; the pill is in the header now and cannot reach up here. */
   z-index: 85; width: min(340px, calc(100vw - 32px));
   transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px;
@@ -1302,11 +1530,18 @@ mark {
 
 .settings { display: grid; gap: 0; border-top: 2px dotted var(--line); }
 .setting {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px 16px;
+  flex-wrap: wrap;
   background: none; border: 0; border-bottom: 2px dotted var(--line);
   padding: 12px 2px; min-height: var(--tap);
   font-size: .88rem;
 }
+/* The label gets a floor measured in the text's own size, not in pixels: at
+   Extra large the exam row squeezed its label column to 155px and wrapped one
+   sentence over six lines while the date input beside it kept every pixel it
+   had. Below that floor the control drops to a line of its own instead, which
+   is the same row read down rather than across. */
+.setting > span:first-child { flex: 1 1 13rem; min-width: 0; }
 .setting input[type=number], .setting input[type=date] {
   /* 44, not 42: two pixels under the thumb's floor is still under it. */
   min-height: 44px; text-align: center; flex: none;
@@ -1370,23 +1605,33 @@ mark {
    two theme sets' variables, so the panel is drawn in whichever one is showing
    and there is no second design to keep in step. */
 
-/* The row on Home that opens it. A ghost button's shape, laid out like the
-   leech row: a name and a line saying what is behind it. */
+/* The row on Home that opens it. A dotted-ruled line like the settings rows,
+   not a deck: it is a side door onto this deck, and drawn as paper with a hard
+   shadow it read as a second thing to study, directly under the sections. */
+/* No top rule and no gap above it: the last section row's own bottom border is
+   the line this sits under, and drawing a second one twenty pixels below it
+   left a seam that read as something removed from between them. */
 .notes-row {
-  width: 100%; text-align: left; margin-top: 20px;
-  display: grid; gap: 3px; min-height: var(--tap);
-  background: var(--surface); border: var(--bw) solid var(--stroke);
-  border-radius: var(--r); box-shadow: var(--sh-sm); padding: 12px 14px;
-  transition: transform .08s ease, box-shadow .08s ease;
+  width: 100%; text-align: left; margin-top: 0;
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
+  min-height: var(--tap); padding: 12px 2px;
+  background: none; border: 0; border-bottom: 2px dotted var(--line);
 }
-.notes-row:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--stroke); }
-.notes-row span { font-weight: 500; font-size: .9rem; text-transform: lowercase; }
-.notes-row small { color: var(--muted); font-size: .76rem; }
+.notes-row span { grid-column: 1; font-weight: 500; font-size: .9rem; text-transform: lowercase; }
+.notes-row small { grid-column: 1; color: var(--muted); font-size: .76rem; }
+/* Every other openable thing in this app — all seven themes below it, every
+   group in the settings sheet, "how this works" on the picker — carries the
+   same cue, and this one carried none at all while opening a panel like the
+   rest of them. Same mark, same ink, same place. */
+.notes-row::after {
+  content: "+"; grid-column: 2; grid-row: 1 / span 2; align-self: center;
+  color: var(--accent); font-size: 1.1rem; line-height: 1;
+}
 
-/* Above the `courses` pill (80) and below the lightbox (90); the two are never
-   open at once, and the pill is inert while this is up anyway. The toast (70)
-   is deliberately left underneath — a panel you are typing into answers inside
-   itself, and .notes-say is where every message it has goes. */
+/* Above the app it covers and below the lightbox (90); the two are never open
+   at once. The toast (70) is deliberately left underneath — a panel you are
+   typing into answers inside itself, and .notes-say is where every message it
+   has goes. */
 .notes {
   position: fixed; inset: 0; z-index: 82;
   background: var(--scrim);
@@ -1457,6 +1702,17 @@ mark {
   padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
 }
 .sheet-bar { display: flex; align-items: center; gap: 8px; }
+/* The way out stays on screen. The card is what scrolls, and with the bar
+   inside that scroll a settings sheet with every group open ran 2500px past its
+   own ✕: from "this device" down there was no visible way out at all. Bled to
+   the card's edges and stuck to its top, so what scrolls goes under it rather
+   than through it — a theme pill sliced in half by the card's top edge read as
+   a stray black bar on its way past. */
+.sheet-card > .sheet-bar {
+  position: sticky; top: -16px; z-index: 2;
+  margin: -16px -20px 0; padding: 16px 20px 10px;
+  background: var(--bg);
+}
 .sheet-bar h2 {
   flex: 1; margin: 0; font-size: 1.05rem; font-weight: 500;
   letter-spacing: -.02em; text-transform: lowercase;
@@ -1475,7 +1731,10 @@ mark {
   border: var(--bw) solid var(--stroke); border-radius: var(--r-sm);
   font: inherit; font-size: .92rem; line-height: 1.6;
 }
-.sheet-form textarea { resize: vertical; }
+/* The extra room at the foot is the fourth row's descenders: `rows` counts line
+   boxes and the box was cut off flush with the last of them, so a g or a p on
+   the last line you had typed was sliced through horizontally. */
+.sheet-form textarea { resize: vertical; line-height: 1.7; padding-bottom: 16px; }
 /* What the boxes could not hold, said before the first edit rather than found
    out from the result. Boxed, because it is the one thing on this sheet that is
    news rather than furniture. */
@@ -1502,7 +1761,71 @@ mark {
   margin-top: 14px; padding-top: 10px; border-top: 2px dotted var(--line);
 }
 .sheet-more .link-btn { flex: none; }
-.danger-link { color: var(--g1); }
+/* Taking a card out of the deck, either way round, in the colour the app uses
+   for "this changes something": beside it `cancel` was drawn in exactly the
+   same ink as the link that empties a card out of the deck. */
+.danger-link { color: var(--warn); }
+
+/* ── the setup sheet ─────────────────────────────────────────────── */
+
+/* Same furniture again — .sheet and .sheet-card are shared with the card
+   editor — so there is one sheet in this app and three things that use it.
+   What is new here is the folding: five groups, one open, and the app's own
+   disclosure (.how) doing the folding, because it is already the idiom on Home
+   and on Progress. Only the spacing changes: inside a sheet the first group
+   must not push a 24px gap under the title bar. */
+#setup .sheet-card { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.setup-g { margin-top: 0; }
+.setup-g:first-of-type { margin-top: 10px; }
+.setup-g:last-of-type { border-bottom: 2px dotted var(--line); }
+/* One rule between two groups, in every open/closed combination there is.
+   A group is separated from the one above it by its own border-top and by
+   nothing else, so anything inside a group that draws a full-width rule at its
+   own edges has to give that edge up. `.settings` opens with one, and every
+   `.setting` row carries a border-bottom to divide it from the next row — and
+   the last row's landed 14px above the next group's, so opening Display or
+   Studying drew two dotted lines with a strip of paper between them. */
+.setup-g > .settings { border-top: 0; margin-bottom: 14px; }
+.setup-g > .settings > .setting:last-child { border-bottom: 0; }
+.setup-g .h-sect:first-child { margin-top: 4px; }
+.setup-g .fineprint { margin-top: 10px; }
+.setup-g .ghost.wide, .setup-g .danger { margin-bottom: 14px; }
+.setup-g .about { margin-bottom: 16px; }
+
+/* The theme control: the drawing it always was, now with room for the name of
+   the colour it is showing. */
+.theme-pick { display: inline-flex; align-items: center; gap: 9px; flex: none; padding: 0 14px; }
+.theme-pick .dood.dood-glyph { width: 20px; height: 20px; color: inherit; }
+
+/* Five steps, each drawn at a size that says which way it goes. These are
+   display sizes, not the sizes they set: 15 to 23 in twos is eight pixels
+   across the whole run, and five A's two pixels apart are five identical A's —
+   you could not tell what you were choosing from the control that was choosing
+   it. The steps the app actually applies are untouched and still come from
+   --font-px. Five of them fit a 320px screen because the box is what holds the
+   tap target, not the letter in it. */
+.fontsteps { display: flex; flex: none; gap: 0; }
+.fontsteps button {
+  min-width: 44px; min-height: 44px;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--muted);
+  border: var(--bw) solid var(--stroke); border-radius: 0;
+  margin-left: calc(var(--bw) * -1);
+  line-height: 1;
+}
+.fontsteps button:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); margin-left: 0; }
+.fontsteps button:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.fontsteps button[data-font-step="default"] { font-size: 12px; }
+.fontsteps button[data-font-step="large"] { font-size: 15px; }
+.fontsteps button[data-font-step="xlarge"] { font-size: 18px; }
+.fontsteps button[data-font-step="huge"] { font-size: 22px; }
+.fontsteps button[data-font-step="biggest"] { font-size: 27px; }
+/* The step you are on is filled, and stands above its neighbours so its own
+   outline is the one you see on both sides of it. */
+.fontsteps button.on {
+  background: var(--accent); color: var(--accent-ink);
+  position: relative; z-index: 1; font-weight: 500;
+}
 
 /* ── lightbox ────────────────────────────────────────────────────── */
 
@@ -1570,9 +1893,9 @@ mark {
 .boot.going { opacity: 0; pointer-events: none; }
 .boot[hidden] { display: none; }
 .boot p { font-size: .88rem; text-transform: lowercase; }
-/* Hidden until something has gone wrong. The screen is opaque and outranks the
-   `courses` pill, so this is the only control on it — and the only way back to
-   the other course when this one will not load. */
+/* Hidden until something has gone wrong. The screen is opaque and covers the
+   app whole, so this is the only control on it — and the only way back to the
+   other course when this one will not load. */
 #boot-back { margin-top: 4px; }
 .boot-scene { display: grid; place-items: center; }
 .boot-raven { width: 52px; height: 52px; color: var(--accent); animation: hop 2.4s ease-in-out infinite; }
@@ -1605,8 +1928,7 @@ mark {
   .pull-refresh,
   .pull-refresh-icon,
   body.pull-refresh-active #app,
-  body.pull-refresh-active > .shelf,
-  body.pull-refresh-active > .shelf-btn { transition: none; animation: none; }
+  body.pull-refresh-active > .shelf { transition: none; animation: none; }
 }
 
 .toast {
@@ -1635,7 +1957,16 @@ mark {
   .sections { grid-template-columns: 1fr; }
   .question { font-size: 1.7rem; }
   .frieze .dood { flex-basis: 30px; width: 30px; }
-  .nav { padding-inline: max(0px, calc(50% - 340px)); }
+  /* The tab bar and the grade bar are the app's floor, and a floor that runs
+     wider than the room it holds up is not a floor. The buttons were already
+     inside the column; the 2px rule over them was drawn right across a 1280px
+     window, so the app read as a phone screen sitting on a full-width ledge.
+     Both are held to the same 680 the body, header and frieze are held to. */
+  .nav {
+    left: 50%; right: auto; transform: translateX(-50%);
+    width: min(680px, 100%); padding-inline: 0;
+  }
+  .dock { width: min(680px, 100%); margin-inline: auto; }
 }
 
 /* ── cards that came out of a .apkg ──────────────────────────────────────────

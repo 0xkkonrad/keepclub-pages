@@ -409,7 +409,7 @@ export function openImporter() {
       return;
     }
     /* Said before the boxes rather than found out later, and said exactly: the
-       backup file on a deck's Progress screen holds what you have answered and
+       backup file in a deck's settings holds what you have answered and
        the cards you add to the deck, and no file anywhere holds the deck
        itself. Offering it as the way to move one would be this screen making a
        promise the app does not keep — and the promise somebody would rely on
@@ -562,7 +562,7 @@ export function openImporter() {
           <li class="said"><b></b><span>Browse is where you write the next card, and every
             card after it — “Write a card” is at the top of the list</span></li>
           <li class="said"><b></b><span>a deck you wrote does not sync, and this device is
-            the only place it exists — Progress → export a backup keeps what you have
+            the only place it exists — Settings → export a backup keeps what you have
             answered and the cards you add next, not the deck</span></li>
           <li class="said"><b></b><span>removing it from the courses screen takes the deck,
             what you have answered and every card in it</span></li>
@@ -858,7 +858,7 @@ export function openImporter() {
         saving = false;
         x.disabled = false;
         fail('the deck was replaced, but its old progress could not be cleared',
-          'device storage is blocked. Reload, then use Progress → erase review history before studying it.'
+          'device storage is blocked. Reload, then use Settings → erase all progress before studying it.'
           + (replacing.written
             ? ' The cards you wrote into the old deck are still on this device too, to keep or to delete.'
             : ''));

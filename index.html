@@ -44,26 +44,30 @@
         <h1 id="course-title">…</h1>
         <p class="sub" id="home-sub">Spaced-repetition revision</p>
       </div>
-      <button class="icon-btn" id="theme-btn" aria-label="Switch colour theme" title="Switch colour theme">
-        <!-- Filled by MuninTheme.apply(), which runs before the first paint:
-             the drawing depends on a setting only it has read. -->
-        <span aria-hidden="true" id="theme-glyph" data-theme-glyph></span>
-      </button>
+      <!-- The corner's two controls, on one axis and in the header's own flow.
+           munin.js puts the `courses` pill in here as the first of them (it
+           only exists inside a course, and only the shell knows how to leave
+           one); the settings mark is markup, so the header is complete before
+           app.js has run.
+           The same pair sits in all three headers, because everything behind
+           settings used to be filed under Progress — including the theme,
+           which from Browse and Progress there was then no way to reach at
+           all. Drawn here rather than borrowed from the device: every other
+           mark in this app is a hand-made line, and an OS gear arrives in
+           whatever shape the phone thinks a gear is. Three rules and three
+           handles. -->
+      <div class="top-acts">
+        <button class="icon-btn setup-btn" id="setup-btn" type="button"
+                aria-label="Settings" title="Settings">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6.6C8 6.4 15 6.3 20 6.5M9.4 3.6C9.2 5.3 9.3 8 9.5 9.6M4 12.1C8 11.9 15 11.9 20 12.1M15.6 9.1C15.4 10.8 15.5 13.5 15.7 15.1M4 17.6C8 17.4 15 17.4 20 17.6M8.4 14.6C8.2 16.3 8.3 19 8.5 20.6"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <main id="main" class="body">
-      <div class="ask-exam" id="ask-exam" hidden>
-        <h2>When is your exam?</h2>
-        <!-- Written by app.js: what is true of a 537-card syllabus is not true
-             of an eleven-card deck someone just imported. -->
-        <p id="ask-why">Give the app a date and it works out how many new cards a
-           day you need, and stops scheduling anything for after you have sat it.</p>
-        <label class="sr" for="home-exam">Exam date</label>
-        <input type="date" id="home-exam">
-        <p class="ask-parsed" id="home-exam-parsed"></p>
-        <button class="link-btn" id="skip-exam">I have not booked one yet</button>
-      </div>
-
       <p class="banner" id="exam-banner" hidden></p>
 
       <div class="today" id="today-card">
@@ -73,21 +77,27 @@
         <p class="today-note" id="today-done" hidden></p>
       </div>
 
-      <details class="how" id="how">
-        <summary>How this works</summary>
-        <p>You are shown a question. Try to answer it in your head, then tap the
-           card to see whether you were right, and say how it went.</p>
-        <p><b>Again</b> means you did not know it. <b>Hard</b> means you got there,
-           slowly. <b>Good</b> means you knew it. <b>Easy</b> means it was obvious.
-           Be honest — the app uses your answer to decide when to show the card
-           next, so flattering yourself just means seeing it less.</p>
-        <p>Cards you find hard come back within minutes. Cards you know come back
-           in days, then weeks. That is the whole trick: you spend your time on
-           the material you have not learned yet.</p>
-        <p>Progress starts in this browser. Built-in courses only share it if
-           you turn on Sync; imported decks always stay here. Export a backup
-           from Progress before you change phone.</p>
-      </details>
+      <!-- Under the button, not over it: the app opens with the thing you came
+           to do, and the date is an admin question you answer once. Once it is
+           answered #exam-banner above stands in its place anyway. -->
+      <div class="ask-exam" id="ask-exam" hidden>
+        <h2>When is your exam?</h2>
+        <!-- The way out of the ask. It was a sentence — "I have not booked one
+             yet" — under the field, which is a second thing to read in a block
+             whose whole job is one question, and the app's other dismissals
+             are all this mark. After the heading it names, the way the sheets
+             and the picker put theirs. Same id, same intent: no date is
+             stored, the ask does not come back, and Settings still has the
+             field. -->
+        <button class="icon-btn ask-x" id="skip-exam" type="button"
+                aria-label="Close" title="Close">✕</button>
+        <!-- Written by app.js: what is true of a 537-card syllabus is not true
+             of an eleven-card deck someone just imported. -->
+        <p id="ask-why">A date sets your daily pace and stops scheduling past it.</p>
+        <label class="sr" for="home-exam">Exam date</label>
+        <input type="date" id="home-exam">
+        <p class="ask-parsed" id="home-exam-parsed"></p>
+      </div>
 
       <button class="trouble" id="leech-row" hidden>
         <span></span>
@@ -117,7 +127,7 @@
            the default. Filled by renderNotice(); the markup carries the
            default so the page says something sane before app.js runs. -->
       <p class="fineprint" id="notice">
-        Revision material. Progress stays here unless you turn on Sync.
+        Revision material.
       </p>
     </main>
   </section>
@@ -155,11 +165,11 @@
             <button class="fig-btn" id="fig-btn">
               <img id="card-img" alt="" decoding="async">
             </button>
-            <figcaption id="fig-caption">Tap the diagram to enlarge</figcaption>
+            <figcaption id="fig-caption">Tap to enlarge</figcaption>
           </figure>
           <p class="fig-missing" id="fig-missing" hidden>
             This card has a diagram that has not been saved on this device. Reconnect,
-            or use Progress → Offline → Save all diagrams offline.
+            or use Settings → this device → Save all diagrams offline.
           </p>
           <!-- Clips for this card. Filled by renderCardVideo(); the player
                expands where the thumbnail sits, so the answer stays above it. -->
@@ -170,9 +180,12 @@
 
     <div class="dock" id="dock">
       <button class="primary big" id="reveal-btn">Show answer</button>
-      <!-- `away`, not `hidden`: the line keeps its place in the dock while the
-           question is up, so revealing the answer does not shrink the card. -->
-      <p class="grade-ask away" id="grade-ask" role="status"
+      <!-- Spoken, never drawn. It stays in the tree because #grade-row is
+           labelled by it and it is the live region that says when a session is
+           practice, but Again/Hard/Good/Easy ask the question themselves and
+           the line above them asked it a third time. `sr`, not `away`: held
+           empty it still cost the card 28px of dock in both states. -->
+      <p class="grade-ask sr" id="grade-ask" role="status"
          aria-live="polite" aria-atomic="true">Did you get it right?</p>
       <div class="grades" id="grade-row" role="group" aria-labelledby="grade-ask" hidden>
         <button class="grade g1" data-g="1"><b>Again</b><small id="iv1"></small></button>
@@ -180,12 +193,19 @@
         <button class="grade g3" data-g="3"><b>Good</b><small id="iv3"></small></button>
         <button class="grade g4" data-g="4"><b>Easy</b><small id="iv4"></small></button>
       </div>
+      <!-- One line, and the two ends of it are the session: undoing the last
+           answer on the left, leaving on the right. The long forms are on the
+           labels, where a screen reader still reads them out. -->
       <div class="dock-foot">
-        <button class="link-btn" id="undo-btn" disabled>↶ Undo last answer</button>
+        <button class="link-btn" id="undo-btn" disabled
+                aria-label="Undo the last answer">↶ Undo</button>
         <!-- §4b's path: the card in front of you is wrong and this is where you
              are standing. Editing mid-session is safe — the queue holds ids and
-             resolves them through byId on every draw — so it needs no warning. -->
-        <button class="link-btn" id="fix-btn">Fix this card</button>
+             resolves them through byId on every draw — so it needs no warning.
+             It stays here rather than under the answer because it has to be
+             reachable from the question too, which is where you usually notice. -->
+        <button class="link-btn" id="fix-btn"
+                aria-label="Edit the card you are looking at">Edit card</button>
         <button class="link-btn" id="end-btn">End session</button>
       </div>
       <p class="keyhint" id="keyhint">Space reveals · 1–4 grades · U undoes</p>
@@ -226,7 +246,15 @@
     <header class="top">
       <div>
         <h1 tabindex="-1">Browse</h1>
-        <p class="sub">Read any card. Nothing here is graded.</p>
+      </div>
+      <div class="top-acts">
+        <button class="icon-btn setup-btn" type="button"
+                aria-label="Settings" title="Settings">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6.6C8 6.4 15 6.3 20 6.5M9.4 3.6C9.2 5.3 9.3 8 9.5 9.6M4 12.1C8 11.9 15 11.9 20 12.1M15.6 9.1C15.4 10.8 15.5 13.5 15.7 15.1M4 17.6C8 17.4 15 17.4 20 17.6M8.4 14.6C8.2 16.3 8.3 19 8.5 20.6"/>
+          </svg>
+        </button>
       </div>
     </header>
     <div class="searchbar">
@@ -234,37 +262,58 @@
       <input id="search" type="search" placeholder="Search the deck…" autocomplete="off" enterkeyhint="search">
       <label class="sr" for="sect-filter">Filter by section</label>
       <select id="sect-filter"></select>
-      <p class="result-count" id="browse-count"></p>
+      <!-- Where you are on the left, the one thing worth doing on the right.
+           This was five links at one weight — a breadcrumb, a bulk toggle, a
+           reset, a primary offer and a way to write a card, all reading as
+           peers. The other three have gone to the controls they act on: open
+           every answer sits on the list's own header line below, clearing a
+           search is the field's own ✕, and writing a card is at the foot of
+           the list you have just read. -->
+      <div class="browse-acts">
+        <button class="link-btn" id="browse-back" hidden>← All sections</button>
+        <button class="ghost" id="browse-study" hidden></button>
+        <button class="link-btn" id="browse-clear" hidden>Clear search and filter</button>
+        <!-- Last, and a whole row of its own: it is a sentence, and it only
+             turns up in the empty state where it is the only offer going. -->
+        <button class="link-btn" id="browse-wide" hidden></button>
+      </div>
+      <!-- The list's header line: how many, and the one thing you can do to all
+           of them at once. -->
+      <div class="browse-head">
+        <p class="result-count" id="browse-count"></p>
+        <button class="link-btn" id="browse-open" hidden>Open every answer</button>
+      </div>
       <!-- The spoken half, separate so it can wait for you to stop typing: a
            live region on the visible count read out a sentence per keystroke. -->
       <p class="sr" id="browse-say" role="status" aria-live="polite"></p>
-      <div class="browse-acts">
-        <!-- Writing a card is offered here rather than on Home: Browse is the
-             screen that already shows you the card that is wrong. Never hidden —
-             a deck you cannot add to looks like a deck that does not take
-             additions, and every deck in this app does. -->
-        <button class="link-btn" id="browse-write">Write a card</button>
-        <button class="link-btn" id="browse-hidden" aria-controls="hidden-list" hidden></button>
-        <button class="link-btn" id="browse-back" hidden>← All sections</button>
-        <button class="link-btn" id="browse-open" hidden>Open every answer</button>
-        <button class="link-btn" id="browse-study" hidden></button>
-        <button class="link-btn" id="browse-wide" hidden></button>
-        <button class="link-btn" id="browse-clear" hidden>Clear</button>
-      </div>
     </div>
     <main class="body">
-      <!-- A card you hid is not in the deck any more, so it is in none of the
-           lists below and there would be nowhere to take the hiding back from.
-           Its own list, off by default, is that place: hiding is only free to
-           undo if undoing it is somewhere you can reach. Directly under the
-           control that opens it, because at the foot of 537 rows opening it
-           looks like a button that did nothing. -->
-      <ul class="browse-list hidden-list" id="hidden-list" hidden></ul>
       <!-- Shown instead of the list when nothing is searched or filtered: 537
            questions in one column is not a thing anyone can browse. -->
       <div class="browse-index" id="browse-index" hidden></div>
+      <!-- The one screen in the app that exists purely to soften a dead end,
+           and it was a sentence over four hundred pixels of nothing in an app
+           built on hand-drawn marks. One drawing, from the set this deck
+           already carries — filled by renderBrowse(). -->
+      <p class="browse-empty" id="browse-empty" hidden aria-hidden="true"></p>
       <ul class="browse-list" id="browse-list"></ul>
       <button class="ghost wide" id="browse-more" hidden>Show more</button>
+      <!-- Writing a card is offered on Browse rather than on Home: this is the
+           screen that already shows you the card that is wrong. At the foot,
+           because you decide to write one after reading, not before. Never
+           hidden — a deck you cannot add to looks like a deck that does not
+           take additions, and every deck in this app does. -->
+      <div class="browse-foot">
+        <button class="ghost" id="browse-write">New card</button>
+        <button class="link-btn" id="browse-hidden" aria-controls="hidden-list" hidden></button>
+      </div>
+      <!-- A card you hid is not in the deck any more, so it is in none of the
+           lists above and there would be nowhere to take the hiding back from.
+           Its own list, off by default, is that place: hiding is only free to
+           undo if undoing it is somewhere you can reach. Directly under the
+           control that opens it, wherever that control stands — a list that
+           opened a thousand pixels away looks like a button that did nothing. -->
+      <ul class="browse-list hidden-list" id="hidden-list" hidden></ul>
     </main>
   </section>
 
@@ -275,9 +324,21 @@
         <h1>Progress</h1>
         <p class="sub" id="stats-sub"></p>
       </div>
+      <div class="top-acts">
+        <button class="icon-btn setup-btn" type="button"
+                aria-label="Settings" title="Settings">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6.6C8 6.4 15 6.3 20 6.5M9.4 3.6C9.2 5.3 9.3 8 9.5 9.6M4 12.1C8 11.9 15 11.9 20 12.1M15.6 9.1C15.4 10.8 15.5 13.5 15.7 15.1M4 17.6C8 17.4 15 17.4 20 17.6M8.4 14.6C8.2 16.3 8.3 19 8.5 20.6"/>
+          </svg>
+        </button>
+      </div>
     </header>
     <main class="body">
       <div class="tiles" id="stat-tiles"></div>
+      <!-- The two repeat-card facts, once there are any to state. Written by
+           renderStats(); hidden until the deck has handed a card back. -->
+      <p class="stat-say" id="repeat-line" hidden></p>
 
       <section class="moment-card membership-card" id="membership-card" hidden>
         <span class="moment-art" id="membership-art" aria-hidden="true"></span>
@@ -292,13 +353,19 @@
       <h2 class="h-sect">Cards coming back</h2>
       <div class="forecast" id="forecast" role="img" aria-label="Cards due each of the next seven days"></div>
 
-      <h2 class="h-sect">By section</h2>
-      <p class="key">
-        <span><i class="m-mature"></i> solid</span>
-        <span><i class="m-young"></i> seen</span>
-        <span><i class="m-learn"></i> learning</span>
-      </p>
-      <div id="mastery"></div>
+      <!-- Twenty-four rows of "0 solid · 0 seen · N total" is the drill-down,
+           not the headline: the sections are already a list on Home and in
+           Browse. Folded behind the app's own disclosure, with the key to the
+           bars inside it, beside the bars it explains. -->
+      <details class="how" id="by-section">
+        <summary>By section, in detail</summary>
+        <div class="key">
+          <span><i class="m-mature"></i> solid</span>
+          <span><i class="m-young"></i> seen</span>
+          <span><i class="m-learn"></i> learning</span>
+        </div>
+        <div id="mastery"></div>
+      </details>
 
       <section class="moment-card month-card" id="month-card" hidden>
         <span class="moment-art" id="month-art" aria-hidden="true"></span>
@@ -315,134 +382,10 @@
       <h2 class="h-sect" id="hoard-title">Milestones</h2>
       <p class="ach-count" id="ach-count"></p>
       <ul class="ach" id="ach-list"></ul>
-
-      <h2 class="h-sect">Settings</h2>
-      <div class="settings">
-        <label class="setting">
-          <span>Exam date <small id="exam-hint"></small></span>
-          <input type="date" id="set-exam">
-        </label>
-        <label class="setting">
-          <span>New cards a day <small id="new-hint"></small></span>
-          <input type="number" id="set-new" min="0" max="200" step="5" inputmode="numeric">
-        </label>
-        <label class="setting">
-          <span>Most cards to repeat in one day
-            <small>Anything over this waits until tomorrow.</small></span>
-          <input type="number" id="set-max" min="10" max="999" step="10" inputmode="numeric">
-        </label>
-        <label class="setting row">
-          <input type="checkbox" id="set-shuffle">
-          <span>Mix sections together <small>Stops you recognising an answer from the cards around it</small></span>
-        </label>
-        <!-- Last, and the only setting here that is not about scheduling: it
-             changes what the app looks like rather than what it shows you next.
-             The four steps are written out in the markup rather than built by
-             app.js, so the control is complete and readable before any script
-             has run — the same reason the notice above carries its default. -->
-        <label class="setting">
-          <span>Text size <small>Scales the whole app, not just the cards.</small></span>
-          <select id="set-font">
-            <option value="small">Small</option>
-            <option value="default">Default</option>
-            <option value="large">Large</option>
-            <option value="xlarge">Extra large</option>
-          </select>
-        </label>
-      </div>
-
-      <!-- Installing sits with the other things you set up, not on the study
-           screen: it is a control you come looking for, not a nudge. Hidden in
-           the markup and only ever revealed by app.js — whether this is possible
-           at all is something only the browser knows, and an app already
-           installed has nothing to offer. The button is absent on iOS, which has
-           no API for this and gets the two-tap instruction instead. -->
-      <div class="install-sect" id="install-card" hidden>
-        <h2 class="h-sect">Install</h2>
-        <p class="fineprint" id="install-note"></p>
-        <button class="ghost wide" id="install-btn" hidden>Install</button>
-      </div>
-
-      <div class="notifications-sect" id="notifications-card" hidden>
-        <h2 class="h-sect">Notifications</h2>
-        <p class="fineprint" id="notifications-note"></p>
-        <button class="ghost wide" id="notifications-btn">Enable milestone notifications</button>
-      </div>
-
-      <!-- Hidden until app.js has counted this deck's diagrams: how many there
-           are and whether there are any at all is a fact about the course, and
-           "the 24 diagrams are about 2 MB" was printed over a three-picture
-           deck and over imported decks with none, above a button that then
-           downloaded nothing. -->
-      <div class="offline-sect" id="offline-card" hidden>
-        <h2 class="h-sect">Offline</h2>
-        <p class="fineprint" id="offline-note"></p>
-        <button class="ghost wide" id="prefetch-btn">Save all diagrams offline</button>
-      </div>
-
-      <h2 class="h-sect">Sync</h2>
-      <p class="fineprint">
-        Study on your phone and your laptop and keep one set of progress, one
-        set of notes, and the cards you have written and fixed here. Turn
-        it on here, then type the key it gives you into the other device. There
-        is no account and no email: the key is the only way in, so keep it, and
-        anyone you give it to shares your deck.
-      </p>
-      <p class="backup-state" id="sync-state"></p>
-      <p class="sync-key" id="sync-key" hidden></p>
-      <div class="btn-row" id="sync-actions"></div>
-      <input type="text" id="sync-join" hidden autocomplete="off"
-             autocapitalize="characters" spellcheck="false"
-             aria-label="Sync key from your other device">
-
-      <h2 class="h-sect">Backup</h2>
-      <p class="fineprint">
-        A backup is a file you keep. Export works whether or not Sync is on.
-        Restore replaces this device’s history exactly, so turn Sync off first
-        or its shared copy would immediately merge back in. A file cannot know
-        what you have written since it was made, so your notes and your own
-        cards are merged into what is here rather than replacing it.
-      </p>
-      <p class="backup-state" id="backup-state"></p>
-      <div class="btn-row">
-        <button class="ghost" id="export-btn">Export a backup</button>
-        <button class="ghost" id="import-btn">Restore from a file</button>
-        <input type="file" id="import-file" accept="application/json,.json" hidden>
-      </div>
-      <button class="danger" id="reset-btn">Erase all progress</button>
-
-      <!-- Directly under Backup, because the whole risk with this section is
-           that it reads as a second one, so the copy leads with the
-           difference. The button carries no label until renderDeckFileState()
-           has worked out which of the two files this deck can honestly
-           produce: a button labelled "Export this deck" for one second and
-           "Export the cards you wrote" the next is worse than a button that
-           arrives a frame late. -->
-      <h2 class="h-sect">Deck file</h2>
-      <p class="fineprint">
-        A backup goes back into this deck on this device. A deck file is the
-        cards themselves, in the format keep club reads and writes, so it opens
-        on another device, in another browser, or in a text editor. It carries
-        no review history and no notes: course files never do. Importing one is
-        not a restore. A file with your cards in it comes back as a second deck.
-        A file that is only the deck as it came in is the same course, so
-        importing it here updates this deck instead.
-      </p>
-      <p class="backup-state" id="deck-file-state"></p>
-      <div class="btn-row"><button class="ghost" id="deck-export-btn" hidden></button></div>
-
-      <h2 class="h-sect">About</h2>
-      <div class="about">
-        <p id="about-copy">keep club is a small open-source flashcard app by
-          <a id="about-author" href="https://kkonrad.com/" target="_blank"
-             rel="author noopener noreferrer">kkonrad</a>.
-        </p>
-        <p id="about-shortcuts">On a keyboard, Space shows the answer, 1–4
-          choose Again, Hard, Good, or Easy, and U undoes the last review.</p>
-        <p><a id="about-source" href="https://github.com/0xkkonrad/keepclub"
-              target="_blank" rel="noopener noreferrer">View the code on GitHub</a></p>
-        <p class="about-build" id="build-line"></p>
-      </div>
+      <!-- The rungs you are not on next are still in the list, because the
+           sentence above it counts them. They are one press away rather than
+           forty rows of dashed border under a line saying there are forty. -->
+      <button class="ghost" id="ach-more" hidden></button>
     </main>
   </section>
 
@@ -537,7 +480,7 @@
         <label class="sheet-label" for="card-section">Section</label>
         <select id="card-section"></select>
       </div>
-      <p class="fineprint sheet-fine">Plain text works. *Emphasis*, **strong**,
+      <p class="fineprint sheet-fine">*Emphasis*, **strong**,
         lists and https links also work; nothing else does.</p>
       <div class="sheet-acts">
         <button class="primary" id="card-save" type="submit">Save card</button>
@@ -551,6 +494,182 @@
     <!-- Taking a card out lives here rather than on the Browse row, so there is
          one confirm, one refusal and one place that knows about the session. -->
     <div class="sheet-more" id="card-more" hidden></div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── SETUP ─────────────────────────── -->
+<!-- Outside #app for the reason the notes panel and the card sheet are: opening
+     it makes #app inert, and a sheet inside its own inert ancestor is a sheet
+     nobody can reach.
+     Everything in here used to be filed under Progress, which is the screen
+     that answers "how am I doing" — ten sections of control panel is not an
+     answer to that question, and it is why the text size ended up three
+     quarters of the way down a tab nobody scrolls. Five groups, one open: the
+     two settings that change what the app looks like are the two people come
+     back for, and the rest are things you set once. -->
+<div class="sheet" id="setup" hidden role="dialog" aria-modal="true"
+     aria-labelledby="setup-h">
+  <div class="sheet-card">
+    <div class="sheet-bar">
+      <h2 id="setup-h">Settings</h2>
+      <button class="icon-btn" id="setup-close" type="button" aria-label="Close settings">✕</button>
+    </div>
+
+    <details class="how setup-g" open>
+      <summary id="setup-display">Display</summary>
+      <div class="settings">
+        <div class="setting">
+          <span>Theme</span>
+          <!-- The id the header used to carry, on the control it now names. The
+               glyph is filled by MuninTheme.apply(); the word beside it is
+               written by applyTheme(), so the button says which colour you are
+               in as well as drawing it. -->
+          <button class="ghost theme-pick" id="theme-btn" type="button">
+            <span aria-hidden="true" id="theme-glyph" data-theme-glyph></span>
+            <span id="theme-name"></span>
+          </button>
+        </div>
+        <!-- Five buttons, each drawn at the size it sets, rather than a native
+             menu: you cannot preview a text size through a dropdown, and this
+             was the one place in the app where a hand-drawn control had been
+             replaced by an OS widget. The steps are written out in the markup
+             rather than built by app.js, so the control is complete and
+             readable before any script has run.
+             The scale starts where the app is drawn rather than under it —
+             13px was smaller than anything else in the app — and it runs up to
+             23 instead of stopping at 19. -->
+        <div class="setting">
+          <span>Text size <small>Scales the whole app, not just the cards.</small></span>
+          <div class="fontsteps" id="set-font" role="group" aria-label="Text size">
+            <button type="button" data-font-step="default" aria-pressed="false" aria-label="Default">A</button>
+            <button type="button" data-font-step="large" aria-pressed="false" aria-label="Large">A</button>
+            <button type="button" data-font-step="xlarge" aria-pressed="false" aria-label="Extra large">A</button>
+            <button type="button" data-font-step="huge" aria-pressed="false" aria-label="Huge">A</button>
+            <button type="button" data-font-step="biggest" aria-pressed="false" aria-label="Biggest">A</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="how setup-g">
+      <summary id="setup-studying">Studying</summary>
+      <div class="settings">
+        <label class="setting">
+          <span>Exam date <small id="exam-hint"></small></span>
+          <input type="date" id="set-exam">
+        </label>
+        <label class="setting">
+          <span>New cards a day <small id="new-hint"></small></span>
+          <input type="number" id="set-new" min="0" max="200" step="5" inputmode="numeric">
+        </label>
+        <label class="setting">
+          <span>Most cards to repeat in one day
+            <small>Anything over this waits until tomorrow.</small></span>
+          <input type="number" id="set-max" min="10" max="999" step="10" inputmode="numeric">
+        </label>
+        <label class="setting row">
+          <input type="checkbox" id="set-shuffle">
+          <span>Mix sections together <small>Stops you recognising an answer from the cards around it</small></span>
+        </label>
+      </div>
+    </details>
+
+    <details class="how setup-g">
+      <summary id="setup-device">This device</summary>
+      <!-- Installing is a control you come looking for, not a nudge. Hidden in
+           the markup and only ever revealed by app.js — whether it is possible
+           at all is something only the browser knows, and an app already
+           installed has nothing to offer. The button is absent on iOS, which
+           has no API for this and gets the two-tap instruction instead. -->
+      <div class="install-sect" id="install-card" hidden>
+        <h3 class="h-sect">Install</h3>
+        <p class="fineprint" id="install-note"></p>
+        <button class="ghost wide" id="install-btn" hidden>Install</button>
+      </div>
+
+      <div class="notifications-sect" id="notifications-card" hidden>
+        <h3 class="h-sect">Notifications</h3>
+        <p class="fineprint" id="notifications-note"></p>
+        <button class="ghost wide" id="notifications-btn">Enable milestone notifications</button>
+      </div>
+
+      <!-- Hidden until app.js has counted this deck's diagrams: how many there
+           are and whether there are any at all is a fact about the course, and
+           "the 24 diagrams are about 2 MB" was printed over a three-picture
+           deck and over imported decks with none, above a button that then
+           downloaded nothing. -->
+      <div class="offline-sect" id="offline-card" hidden>
+        <h3 class="h-sect">Offline</h3>
+        <p class="fineprint" id="offline-note"></p>
+        <button class="ghost wide" id="prefetch-btn">Save all diagrams offline</button>
+      </div>
+    </details>
+
+    <details class="how setup-g">
+      <summary id="setup-keeping">Keeping your progress</summary>
+      <h3 class="h-sect">Sync</h3>
+      <p class="fineprint">
+        Study on your phone and your laptop and keep one set of progress, notes
+        and cards. Turn it on here, then type the key it gives you into the
+        other device. There is no account and no email — the key is the only
+        way in, so keep it, and anyone you give it to shares your deck.
+      </p>
+      <p class="backup-state" id="sync-state"></p>
+      <p class="sync-key" id="sync-key" hidden></p>
+      <div class="btn-row" id="sync-actions"></div>
+      <input type="text" id="sync-join" hidden autocomplete="off"
+             autocapitalize="characters" spellcheck="false"
+             aria-label="Sync key from your other device">
+
+      <h3 class="h-sect">Backup</h3>
+      <p class="fineprint">
+        A backup is a file you keep, and it works whether or not Sync is on.
+        Restoring replaces this device’s history exactly, so turn Sync off
+        first. Your notes and your own cards are merged in rather than replaced.
+      </p>
+      <p class="backup-state" id="backup-state"></p>
+      <div class="btn-row">
+        <button class="ghost" id="export-btn">Export a backup</button>
+        <button class="ghost" id="import-btn">Restore from a file</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+      <button class="danger" id="reset-btn">Erase all progress</button>
+
+      <!-- Directly under Backup, because the whole risk with this section is
+           that it reads as a second one, so the copy leads with the
+           difference. The button carries no label until renderDeckFileState()
+           has worked out which of the two files this deck can honestly
+           produce: a button labelled "Export this deck" for one second and
+           "Export the cards you wrote" the next is worse than a button that
+           arrives a frame late. -->
+      <h3 class="h-sect">Deck file</h3>
+      <p class="fineprint">
+        A backup goes back into this deck on this device. A deck file is the
+        cards themselves, in the format keep club reads and writes, so it opens
+        on another device, in another browser, or in a text editor. It carries
+        no review history and no notes: course files never do. Importing one is
+        not a restore. A file with your cards in it comes back as a second deck.
+        A file that is only the deck as it came in is the same course, so
+        importing it here updates this deck instead.
+      </p>
+      <p class="backup-state" id="deck-file-state"></p>
+      <div class="btn-row"><button class="ghost" id="deck-export-btn" hidden></button></div>
+    </details>
+
+    <details class="how setup-g">
+      <summary id="setup-about">About</summary>
+      <div class="about">
+        <p id="about-copy">keep club is a small open-source flashcard app by
+          <a id="about-author" href="https://kkonrad.com/" target="_blank"
+             rel="author noopener noreferrer">kkonrad</a>.
+        </p>
+        <p id="about-shortcuts">On a keyboard, Space shows the answer, 1–4
+          choose Again, Hard, Good, or Easy, and U undoes the last review.</p>
+        <p><a id="about-source" href="https://github.com/0xkkonrad/keepclub"
+              target="_blank" rel="noopener noreferrer">View the code on GitHub</a></p>
+        <p class="about-build" id="build-line"></p>
+      </div>
+    </details>
   </div>
 </div>
 

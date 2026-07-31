@@ -86,7 +86,7 @@ const LOOSE_SECTION = 'u.loose';
 const EXPORT_APP = 'munin/' + COURSE.id;
 const EXPORT_FORMAT = 1;
 // A course may name the exam it was built for (course.json examDate); a fresh
-// install starts there rather than asking. It is changed in Progress, and
+// install starts there rather than asking. It is changed in Settings, and
 // clearing it goes back to plain spacing. No date in the course → no default.
 const EXAM_DEFAULT = (typeof COURSE.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(COURSE.examDate)) ? COURSE.examDate : '';
 // A <input type="date"> fires `change` on every keystroke in the year segment,
@@ -97,8 +97,13 @@ const EXAM_MIN_YEAR = 2020, EXAM_MAX_YEAR = 2040;
 // belong to app.css (`:root[data-font=…]`), which is the only place that knows
 // what the type scale is measured in, and a number stored here would be a
 // second opinion about it. 'default' is 15px — the size the app was drawn at,
-// and what anyone who has never opened this setting is already reading.
-const FONT_SIZES = ['small', 'default', 'large', 'xlarge'];
+// and what anyone who has never opened this setting is already reading. It is
+// also the floor now: the step below it was 13px, which is smaller than the
+// app draws anything else, and the scale runs up from here to 23 rather than
+// stopping at 19. A save holding the step that went comes back as 'default'
+// through the sanitiser, which is the smallest there is now — the same 15px
+// that device would be offered on a fresh install.
+const FONT_SIZES = ['default', 'large', 'xlarge', 'huge', 'biggest'];
 const FONT_DEFAULT = 'default';
 
 const $ = (s) => document.querySelector(s);
@@ -297,12 +302,13 @@ function sanitise(raw) {
   s.settings.at = Math.round(num(s.settings.at, 0, 8.64e15, 0));
   s.settings.shuffle = !!s.settings.shuffle;
   s.settings.examSkipped = !!s.settings.examSkipped;
-  // Anything that is not one of the four steps is the default size, which also
-  // covers the case that matters most: every save written before this setting
+  // Anything that is not one of the five steps is the default size, which also
+  // covers the two cases that matter: every save written before this setting
   // existed has no fontSize at all, and those people must go on reading the app
-  // at exactly the size they have always read it at. The value is written
-  // straight into an attribute selector, so it is checked against the list
-  // rather than merely coerced to a string.
+  // at exactly the size they have always read it at; and a save holding the
+  // 13px step that has since been dropped lands on the smallest step there is.
+  // The value is written straight into an attribute selector, so it is checked
+  // against the list rather than merely coerced to a string.
   if (!FONT_SIZES.includes(s.settings.fontSize)) s.settings.fontSize = FONT_DEFAULT;
   // The default exam date belongs to a fresh install only. A restored backup
   // that never had one must not silently inherit it — that would compress every
@@ -467,6 +473,7 @@ function refuseForeignWrite() {
       if (current === 'stats') renderStats();
       if (current === 'browse') renderBrowse();
       renderNotesIfOpen();
+      renderSetupIfOpen();
     }
   } catch (e) { /* retain the last readable in-memory state */ }
   toast('Another tab is studying this deck. Finish there before changing progress or settings.');
@@ -514,12 +521,12 @@ function writeNow() {
     saveBlocked = false;
     if (wasBlocked) {
       toast('Progress is saving again.');
-      if (current === 'stats') renderBackupState();
+      if (current === 'stats' || !$('#setup').hidden) renderBackupState();
     }
   } catch (e) {
     saveBlocked = true;
-    toast('Progress is not saving — stop here and export a backup from Progress.', true);
-    if (current === 'stats') renderBackupState();
+    toast('Progress is not saving — stop here and export a backup from Settings.', true);
+    if (current === 'stats' || !$('#setup').hidden) renderBackupState();
   }
   // Never mid-session: adopting a merged state would swap the deck out from
   // under the card on screen. The upload waits for the walk back to Progress.
@@ -1060,6 +1067,11 @@ function drawFigureOn(root) {
   svg.classList.add('fig-draw');
 }
 
+/* One string for one affordance. Study said "Tap to enlarge", Browse said "Tap
+ * the diagram to enlarge" and, two lines further down, "Tap the drawing to
+ * enlarge" — three wordings for the same tap on the same picture. */
+const ENLARGE_HINT = 'Tap to enlarge';
+
 function renderCardFigure(card) {
   const box = $('#card-figure');
   const def = card && card.figure && FIGURES && FIGURES[card.figure.figureId];
@@ -1072,7 +1084,12 @@ function renderCardFigure(card) {
   plate.innerHTML = figureSVG(card);
   litFigure(plate, card);
   plate.setAttribute('aria-label', `Enlarge the drawing: ${stripTags(card.front)}`);
-  $('#figure-cap').textContent = def.cap + ' Tap to enlarge.';
+  // A middot, because the hand face all but swallows a full stop at this size:
+  // "…as if you were facing forward. Tap to enlarge." rendered as one run-on
+  // sentence ending in an instruction. And the same four words wherever the
+  // offer is made — Browse used to say "Tap the diagram to enlarge" for the
+  // identical affordance one screen away.
+  $('#figure-cap').textContent = def.cap + ' · ' + ENLARGE_HINT;
   box.hidden = false;
   // No drawFigureOn() here: this runs while #answer-wrap is still hidden.
   // reveal() sets the drawing going, once the answer is on screen.
@@ -1148,7 +1165,7 @@ function renderCardVideo(card) {
   if (!clips.length) { host.innerHTML = ''; return; }
   // data-card is what "close" uses to rebuild the thumbnails; without it the
   // player collapsed into an empty row.
-  host.innerHTML = `<p class="vhead">${clips.length === 1 ? 'A clip on this' : 'Clips on this'}</p>
+  host.innerHTML = `<p class="h-sect vhead">${clips.length === 1 ? 'A clip on this' : 'Clips on this'}</p>
     <div class="vrow" data-card="${escapeHtml(card.cardId)}">${clips.map((c) => thumbHtml(c)).join('')}</div>`;
 }
 
@@ -1489,10 +1506,23 @@ function renderAch() {
   $('#ach-count').textContent = got
     ? `${got} of ${ACHIEVEMENTS.length} earned. They unlock as you revise — there is nothing to collect deliberately.`
     : `Nothing in the log yet. ${ACHIEVEMENTS.length} of them turn up as you revise.`;
+  // Forty rows under a sentence saying there are forty, twenty-six of them
+  // wearing the same drawing, is the sentence proved by repetition. What is
+  // worth showing is the rung you are on next — and one rung of three different
+  // ladders, not three steps of the same one, so the first locked row of each
+  // of the first three families is the one that stays out. Nothing is removed:
+  // the sentence counts them, and the rest are one press away.
+  const nextUp = new Set();
+  const laddersShown = new Set();
+  for (const a of ACHIEVEMENTS) {
+    if (unlocked[a.id] || nextUp.size >= 3 || laddersShown.has(a.family)) continue;
+    laddersShown.add(a.family);
+    nextUp.add(a.id);
+  }
   const staticRows = ACHIEVEMENTS.map((a) => {
     const on = unlocked[a.id];
     const when = on ? ` · ${longDate(dayKey(on))}` : '';
-    return `<li class="${on ? '' : 'locked'}">${doodle(a.art)}
+    return `<li class="${on ? '' : `locked${nextUp.has(a.id) ? ' next' : ''}`}">${doodle(a.art)}
       <span class="a-txt"><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.description)}${escapeHtml(when)}</small></span>
       ${on && a.shareable
         ? `<button class="share-mini" data-share-ach="${escapeHtml(a.id)}" aria-label="Share ${escapeHtml(a.title)}">Share</button>`
@@ -1506,7 +1536,15 @@ function renderAch() {
       <button class="share-mini" data-share-moment="${escapeHtml(moment.id)}"
         aria-label="Share ${escapeHtml(moment.title)}">Share</button>
     </li>`).join('');
-  $('#ach-list').innerHTML = staticRows + repeatableRows;
+  const list = $('#ach-list');
+  list.innerHTML = staticRows + repeatableRows;
+  // Folded only where there is a wall to fold. A log with a handful of rungs
+  // left in it is a list, not a wall, and a button under it would be worse.
+  const folded = ACHIEVEMENTS.length - got > 8;
+  list.classList.toggle('folded', folded);
+  const more = $('#ach-more');
+  more.hidden = !folded;
+  more.textContent = `Show all ${ACHIEVEMENTS.length}`;
 }
 
 /* A drawing for each of the 24 chapters. Picked for the thing the chapter is
@@ -1851,6 +1889,16 @@ function go(name, moveFocus = false) {
   // nobody had asked them of, because that flag outlived the screen it belongs
   // to.
   if (name === 'browse') { browseLimit = BROWSE_FIRST; showingHidden = false; renderBrowse(); }
+  // The `courses` pill is the shell's, and there is exactly one of it: it used
+  // to be fixed to the window, and inlined into the header it would otherwise
+  // have to be three buttons, three things to focus, three to inert, three for
+  // the picker to hand focus back to. Carry the one element into whichever
+  // header is on screen instead. Study and Done have no corner to put it in,
+  // which is right — a session is not the moment to change course — and it
+  // simply stays where it was, on a screen that is now hidden.
+  const acts = $('#s-' + name + ' .top-acts');
+  const pill = document.querySelector('.shelf-btn');
+  if (acts && pill && pill.parentElement !== acts) acts.prepend(pill);
   const body = $('#s-' + name).querySelector('.body');
   if (body && name !== 'study') body.scrollTop = 0;
   // "Skip to content" pointed at #main, which was the home screen's <main> and
@@ -1899,11 +1947,17 @@ function leeches() {
   });
 }
 
-/** Format a yyyy-mm-dd string the way a person would say it. */
+/** Format a yyyy-mm-dd string the way a person would say it.
+ *
+ * en-GB, named, everywhere a date is printed. `undefined` hands the choice to
+ * whatever locale the browser happens to be set to, and on a machine set to the
+ * United States an app that says colour, harbour and almanac printed
+ * "Tuesday, September 15, 2026" — three American dates undoing a lot of
+ * carefully built voice. The deck's language is the app's, not the device's. */
 function longDate(iso) {
   const t = Date.parse(iso + 'T00:00:00');
   if (Number.isNaN(t)) return '';
-  return new Date(t).toLocaleDateString(undefined,
+  return new Date(t).toLocaleDateString('en-GB',
     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
@@ -1913,37 +1967,49 @@ function daysToSeeAll(unseen) {
   return pace > 0 ? Math.ceil(unseen / pace) : Infinity;
 }
 
-function renderAskExam(c) {
-  // The exam date decides the entire daily workload, so it is asked for before
-  // anything else — buried in settings, nobody ever finds it, and they walk
-  // into the exam having seen half the deck.
+function renderAskExam() {
+  // The exam date decides the entire daily workload, so it is asked for early —
+  // buried in settings, nobody ever finds it, and they walk into the exam
+  // having seen half the deck.
   // Shown until a date is set or the prompt is dismissed — not just on day one.
   // Booking the exam a week in is the common case, and by then a "seen === 0"
   // prompt would be long gone with no way back to it except the third tab.
   $('#ask-exam').hidden = !!(state.settings.examDate || state.settings.examSkipped);
-  $('#how').open = c.seen === 0;
 }
 
+/** True once this has printed a pacing sentence of its own, which is the note
+ *  under the Study button said again in other numbers — see renderHome(). */
 function renderExamBanner(c) {
   const el = $('#exam-banner');
   const d = daysToExam();
-  if (d === null) { el.hidden = true; return; }
+  if (d === null) { el.hidden = true; return false; }
   el.hidden = false;
   if (d < 0) {
     el.className = 'banner';
-    el.innerHTML = `<b>Exam date has passed.</b> Clear it in Progress → Settings to go back to normal spacing.`;
-    return;
+    el.innerHTML = `<b>Exam date has passed.</b> Clear it in Settings → Studying to go back to normal spacing.`;
+    return false;
   }
   const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
   const pace = newBudget();
   const introDays = c.fresh ? daysToSeeAll(c.fresh) : 0;
   const tight = c.fresh > 0 && introDays > Math.max(1, d);
   el.className = 'banner' + (tight ? ' tight' : '');
-  el.innerHTML = tight
-    ? `<b>Exam ${when}.</b> At ${pace} new cards a day, the ${c.fresh} you have not seen take ${introDays} days. You will not get through the deck — raise the daily number in Progress, or accept that you will skip some sections.`
+  // "the remaining 527" over a deck of 537 read as a countdown of the whole
+  // deck, ten cards short, beside a note underneath that counted all 537. It
+  // counts the cards you have not seen, so it says so — the same words the
+  // tight branch beside it has always used.
+  // Once the date is set the ask that took it is gone, and this line stood in
+  // its place with nothing on it to press: changing the date meant going and
+  // finding it in a sheet. The line that states the fact carries the way to
+  // amend it, quietly, the way the rest of the app's second offers are drawn.
+  const amend = ' <button class="link-btn banner-link" type="button"'
+    + ' data-open-setup>Change it in settings</button>';
+  el.innerHTML = (tight
+    ? `<b>Exam ${when}.</b> At ${pace} new cards a day, the ${c.fresh} you have not seen take ${introDays} days. You will not get through the deck — raise the daily number in Settings, or accept that you will skip some sections.`
     : `<b>Exam ${when}.</b> ${c.fresh
-        ? `${pace} new cards a day gets you through the remaining ${c.fresh} in time.`
-        : 'You have seen every card at least once.'} Every card comes back at least once before you sit it.`;
+        ? `${pace} new cards a day gets you through the ${c.fresh} you have not seen in time.`
+        : 'You have seen every card at least once.'} Every card comes back at least once before you sit it.`) + amend;
+  return true;
 }
 
 function renderLeechRow() {
@@ -1957,7 +2023,7 @@ function renderLeechRow() {
 
 /* ── install ── */
 
-/* This lives in Settings, on the Progress screen, and not on Study.
+/* This lives in Settings, under "this device", and not on Study.
  *
  * It used to be a card on the home screen, which made it a nudge: something you
  * had not asked for, in the way of the button you came for. So it needed a
@@ -2032,7 +2098,7 @@ function renderHome() {
         // below already handles the same sentence about the same number.
         ? `At ${pace} new cards a day you will have seen ${DECK.cards.length === 1
           ? 'it' : `all ${n(DECK.cards.length)}`} in ${plural(daysToSeeAll(c.fresh), 'day')}.`
-        : `New cards are switched off, so ${c.fresh} of ${DECK.cards.length} will stay unseen. Raise the daily number in Progress.`;
+        : `New cards are switched off, so ${c.fresh} of ${DECK.cards.length} will stay unseen. Raise the daily number in Settings.`;
   } else {
     // The size of the session that this button actually starts. Sized from the
     // unseen cards alone it promised twenty and handed over forty, because the
@@ -2045,7 +2111,7 @@ function renderHome() {
     btn.textContent = c.fresh && batch ? `Practise ${batch} now` : 'Practise ahead';
     btn.dataset.mode = 'ahead';
     $('#today-note').textContent = pace === 0 && c.fresh
-      ? `New cards are switched off, so ${c.fresh} of ${DECK.cards.length} will stay unseen. Raise the daily number in Progress.`
+      ? `New cards are switched off, so ${c.fresh} of ${DECK.cards.length} will stay unseen. Raise the daily number in Settings.`
       : c.fresh
         ? `Today's ${pace} are done and nothing is due. You can practise ${batch} now: nothing you answer counts, and nothing moves. ${c.fresh} cards left to see.`
         : 'Nothing is due. Practice pulls forward the cards scheduled soonest and leaves the schedule exactly where it is — worth it the week before the exam, not before.';
@@ -2055,29 +2121,58 @@ function renderHome() {
   $('#today-done').hidden = today === 0;
   $('#today-done').textContent = `You have answered ${today} card${today === 1 ? '' : 's'} today.`;
 
-  renderAskExam(c);
-  renderExamBanner(c);
+  renderAskExam();
+  // One pacing sentence at a time. With a date set, the banner above the Study
+  // button and the note under it are the same claim in different arithmetic —
+  // "20 a day gets you through the 527 you have not seen in time" over the
+  // button, "at 20 a day you will have seen all 537 in 27 days" under it — and
+  // a reader left doing sums on their own home screen is the opposite of calm.
+  // The banner wins: it is the one that knows about the date. The note keeps
+  // its text and loses its space, so nothing that reads this line goes blind.
+  $('#today-note').hidden = renderExamBanner(c);
   renderLeechRow();
 
   const list = $('#section-list');
   list.innerHTML = '';
-  for (const [g, inside] of byGroup()) {
-    // counts() walks the whole deck, so it is called once per section and the
-    // theme's total is added up from those rather than costing a second pass.
+  // counts() walks the whole deck, so it is called once per section and the
+  // theme's total is added up from those rather than costing a second pass.
+  const themes = byGroup().map(([g, inside]) => {
     const rows = inside.map((s) => {
       const sc = counts(s.sectionId);
       return { s, sc, pending: Math.min(sc.due, 999) + sc.learning };
     });
+    return {
+      g,
+      rows,
+      waiting: rows.reduce((t, r) => t + r.pending, 0),
+      unseen: rows.reduce((t, r) => t + r.sc.fresh, 0),
+    };
+  });
+  /* Which themes stand open.
+   *
+   * The question Home answers is "where do I go next", so a theme with cards
+   * waiting answers it and is open. With nothing waiting, the first theme you
+   * have not finished is the answer instead. On a deck you have been all the
+   * way through, nothing opens: there is nothing left to point at, and the
+   * badge on each heading already says so. */
+  const anyWaiting = themes.some((t) => t.waiting > 0);
+  const firstUnfinished = anyWaiting ? -1 : themes.findIndex((t) => t.unseen > 0);
+  for (const [i, { g, rows, waiting }] of themes.entries()) {
+    let host = list;
     if (g.title) {
-      // The heading says what is waiting inside the theme, because the question
-      // Home answers is "where do I go next" and the answer used to be
-      // twenty-four rows of column you had to read to work it out.
-      const waiting = rows.reduce((t, r) => t + r.pending, 0);
-      const h = document.createElement('h3');
+      // The heading says what is waiting inside the theme, because the answer
+      // used to be twenty-four rows of column you had to read to work it out.
+      // Folded, that badge is the whole of what a closed theme has to say.
+      const part = document.createElement('details');
+      part.className = 'part';
+      part.open = anyWaiting ? waiting > 0 : i === firstUnfinished;
+      const h = document.createElement('summary');
       h.className = 'h-part';
       h.innerHTML = `<span>${escapeHtml(g.title)}</span>`
         + (waiting ? `<span class="h-part-n">${n(waiting)} to review</span>` : '');
-      list.appendChild(h);
+      part.appendChild(h);
+      list.appendChild(part);
+      host = part;
     }
     const ul = document.createElement('ul');
     ul.className = 'sections';
@@ -2089,8 +2184,14 @@ function renderHome() {
       let meta;
       // Counted through plural(): a section can hold one card, and a deck
       // written here starts as one section holding exactly one.
-      if (pending) meta = `${pending} to review · ${plural(s.cardCount, 'card')}`;
-      else if (sc.seen === 0) meta = `${plural(s.cardCount, 'card')} · not started`;
+      // What is waiting is the badge's job and the theme heading's above it —
+      // printed here as well it was one number in four pieces of furniture on
+      // one row: heading, meta line, badge and bar. The meta says what the badge
+      // cannot, which is how big the section is.
+      if (pending) meta = plural(s.cardCount, 'card');
+      // No badge and an empty meter already say it, twice over. Printed down
+      // twenty-four rows it was the same two words twenty-four times.
+      else if (sc.seen === 0) meta = plural(s.cardCount, 'card');
       else if (sc.fresh) meta = `${sc.fresh} new left · ${plural(s.cardCount, 'card')}`;
       else meta = `all ${s.cardCount} scheduled · ${pct}% known well`;
 
@@ -2102,12 +2203,15 @@ function renderHome() {
         ${pending ? `<span class="sect-badge">${pending}</span>` : ''}
         <span class="sect-meta">${meta}</span>
         ${pct > 0 ? `<span class="sect-meter"><i style="width:${Math.min(100, pct)}%"></i></span>` : ''}`;
-      b.setAttribute('aria-label', `${s.title}. ${meta}. Study this section.`);
+      // The badge is a bare number and reads out as one, so the count it stands
+      // for is spelled into the label the row is announced under.
+      b.setAttribute('aria-label',
+        `${s.title}. ${pending ? `${pending} to review. ` : ''}${meta}. Study this section.`);
       b.addEventListener('click', () => startSession(s.sectionId));
       li.appendChild(b);
       ul.appendChild(li);
     }
-    list.appendChild(ul);
+    host.appendChild(ul);
   }
   renderNotesRow();
   hydrateSectionArtwork(list);
@@ -2300,7 +2404,7 @@ function renderNotes() {
 
 /** When it was written, and whether it has been changed since. */
 function noteWhen(note) {
-  const written = new Date(n(note.at)).toLocaleDateString(undefined,
+  const written = new Date(n(note.at)).toLocaleDateString('en-GB',
     { day: 'numeric', month: 'short', year: 'numeric' });
   // A minute's slack: `ed` is stamped by the same clock a moment after `at`,
   // and a note created and never touched again must not claim it was edited.
@@ -2887,7 +2991,7 @@ async function commitCards(id, say) {
   return { ok: wrote.ok, id, say: wrote.ok ? say : wrote.say, diagnostics: [] };
 }
 
-/** "537 cards is more than you can cram" is true of a syllabus and false of a
+/** What a date buys you is not the same sentence about a syllabus as about a
  *  deck someone imported on the bus. Say the thing that is true of this deck —
  *  and re-say it, because the number moves the moment a card is written. */
 function renderAskWhy() {
@@ -2897,10 +3001,13 @@ function renderAskWhy() {
   // day" is a sentence about a workload that does not exist yet. A deck you
   // wrote here starts at exactly one, so this is the state it opens in.
   cram.textContent = DECK.cards.length > 120
-    ? `${DECK.cards.length} cards is more than you can cram. Give the app a date and it works out how many new cards a day you need, and stops scheduling anything for after you have sat it.`
+    // The deck's size is the line under the title and it is in the pacing note
+    // below the button. Said a third time here it was an opener that pushed the
+    // whole ask past the fold.
+    ? 'A date sets your daily pace and stops scheduling past it.'
     : DECK.cards.length < 2
-      ? 'Give the app a date and it paces the deck to it, however big the deck gets, and stops scheduling anything for after you have sat it.'
-      : `Give the app a date and it works out how many of these ${plural(DECK.cards.length, 'card')} a day you need, and stops scheduling anything for after you have sat it.`;
+      ? 'A date paces the deck, however big it grows.'
+      : `A date works out how many of these ${plural(DECK.cards.length, 'card')} a day you need.`;
 }
 
 /** The deck grew, shrank or changed a word. Everything counted off it moves.
@@ -3606,7 +3713,11 @@ function renderCardSheet() {
   const record = editing ? cardRecord(cardSheet.cardId) : null;
   const gone = editing && !sheetCard();
   $('#card-sheet-h').textContent = editing ? 'Edit card' : 'New card';
-  $('#card-save').textContent = editing ? 'Save card' : 'Write card';
+  // One verb for one action. The trigger, the title and this button used to be
+  // three names for the same object — you tapped "fix card", landed on "edit
+  // card" and were offered "save card" — and a beat went on checking you had
+  // pressed the right thing. New card / edit card, saved either way.
+  $('#card-save').textContent = 'Save card';
   $('#card-save').disabled = gone;
 
   // The select is the deck's, and only where the deck has more than one section
@@ -3643,7 +3754,7 @@ function renderCardSheet() {
   }
   const takeAway = yours
     ? '<button class="link-btn danger-link" type="button" data-card-delete>Delete this card</button>'
-    : '<button class="link-btn" type="button" data-card-hide>Hide this card</button>';
+    : '<button class="link-btn danger-link" type="button" data-card-hide>Hide this card</button>';
   // Only where there is a layer over a shipped card to take off. A card you
   // wrote has no course card underneath it, which is why deleting is the only
   // way it goes and why deleting is the one thing here behind a confirm.
@@ -4110,7 +4221,7 @@ function reveal() {
 function answer(g) {
   if (!session || !session.revealed) return;
   if (saveBlocked) {
-    toast('Progress is not saving — export a backup from Progress before answering more.', true);
+    toast('Progress is not saving — export a backup from Settings before answering more.', true);
     return;
   }
   if (!ownsStudyLock()) {
@@ -4630,7 +4741,10 @@ function browseCardActs(card) {
   } else if (yours) {
     notice = '<span class="b-mine">Written by you.</span>';
   }
-  return `<div class="b-acts">${notice}
+  // `bare` is the row with nothing to say for itself, which is nearly all of
+  // them: Edit alone goes in the row's right gutter beside the chevron rather
+  // than on a line of its own. A row carrying a notice keeps its line.
+  return `<div class="b-acts${notice ? '' : ' bare'}">${notice}
     <button class="link-btn" type="button" data-card-edit
       aria-label="Edit this card">Edit</button></div>`;
 }
@@ -4649,11 +4763,18 @@ function browseRow(hit, terms, withSection) {
   const prompt = `<span class="b-head"><span class="b-where" hidden></span>`
     + `<span class="b-q"></span><span class="b-why" hidden></span></span>`;
   const acts = browseCardActs(c);
+  // Where the card lives, but only where the row is not already standing under
+  // the answer: with a section chosen the dropdown, the breadcrumb and the page
+  // title all say it, and with a run of rows grouped in deck order the run's own
+  // heading says it — so opening a card printed its section a fourth time. What
+  // it has always been worth saying is the second half, how the card is going.
+  const placed = withSection || $('#sect-filter').value;
+  const where = placed ? '' : `${escapeHtml(sect ? sect.title : c.sectionId)} · `;
   const answer = `<div class="browse-ans"><span class="b-text">${c.back || ''}</span>
-      ${image ? `<button class="plate b-plate" aria-label="Enlarge the diagram: ${escAttr(promptText)}"><img src="${escAttr(courseMediaUrl(image))}" alt="Diagram: ${escapeHtml(promptText)}" loading="lazy"${image.width && image.height ? ` width="${n(image.width)}" height="${n(image.height)}"` : ''}></button><span class="b-zoom">Tap the diagram to enlarge</span>` : ''}
-      ${hasFig ? `<button class="plate b-fig" aria-label="Enlarge the drawing: ${escAttr(promptText)}">${figureSVG(c)}</button><span class="b-zoom">Tap the drawing to enlarge</span>` : ''}
+      ${image ? `<button class="plate b-plate" aria-label="Enlarge the diagram: ${escAttr(promptText)}"><img src="${escAttr(courseMediaUrl(image))}" alt="Diagram: ${escapeHtml(promptText)}" loading="lazy"${image.width && image.height ? ` width="${n(image.width)}" height="${n(image.height)}"` : ''}></button><span class="b-zoom">${ENLARGE_HINT}</span>` : ''}
+      ${hasFig ? `<button class="plate b-fig" aria-label="Enlarge the drawing: ${escAttr(promptText)}">${figureSVG(c)}</button><span class="b-zoom">${ENLARGE_HINT}</span>` : ''}
       <div class="b-back-media"></div>
-      <span class="b-sect">${escapeHtml(sect ? sect.title : c.sectionId)} · ${STATE_WORDS[stateOf(c.cardId)]}</span>
+      <span class="b-sect">${where}${STATE_WORDS[stateOf(c.cardId)]}</span>
       </div>`;
   /* The layer's own line and Edit go on the row, never inside the answer.
    *
@@ -4785,18 +4906,26 @@ function renderBrowseIndex() {
   const host = $('#browse-index');
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
+  // The same fold Home uses, over the same seven themes: twenty-four tiles in
+  // one column is the wall this screen exists to save you from, and the app has
+  // one folding idiom or none. The first theme stands open, because a screen of
+  // seven shut doors and nothing else shows you nothing.
+  let first = true;
   for (const g of groupOf.values()) {
     const sec = document.createElement('section');
     sec.className = 'bgroup';
     const named = !!g.title;
-    sec.innerHTML = (named ? `<h2 class="bgroup-h">
+    sec.innerHTML = (named ? `<details class="part"${first ? ' open' : ''}>
+      <summary class="bgroup-h">
         ${doodle(GROUP_ART[g.groupId] || COURSE.fallback, 'bgroup-art')}
         <span class="bgroup-t">${escapeHtml(g.title)}</span>
         <button class="bgroup-all" data-scope="${escapeHtml(GROUP_AT + g.groupId)}"
           aria-label="Read all ${plural(g.cardCount, 'card')} in ${escAttr(g.title)}">${
   plural(g.cardCount, 'card')} →</button>
-      </h2>` : '')
-      + '<ul class="btiles"></ul>';
+      </summary>
+      <ul class="btiles"></ul>
+    </details>` : '<ul class="btiles"></ul>');
+    if (named) first = false;
     const ul = sec.querySelector('.btiles');
     for (const sectionId of g.sectionIds) {
       const s = sectionOf.get(sectionId);
@@ -4896,7 +5025,9 @@ function renderBrowse() {
   } else if (terms.length) {
     count = `${n(hits.length)} of ${plural(all, 'card')}`;
   } else if (sk) {
-    count = `${plural(scope, 'card')} in ${scopeName(sk)}`;
+    // Not "34 cards in 01 Boat and nautical terms": the select directly above
+    // is already showing the section's name, at full size.
+    count = plural(scope, 'card');
   } else {
     // Nothing narrowed: the index is on screen, so the honest count is of the
     // things you can actually see and press, not of the cards behind them.
@@ -4911,18 +5042,13 @@ function renderBrowse() {
   sayCount(count);
   $('#browse-count').classList.toggle('nothing', !hits.length);
 
-  // One control, labelled for what it will actually undo — the old combined
-  // "Clear search and filter" threw away a typed query when the empty state had
-  // just told you to clear the filter.
+  // Only the case neither control can do for itself. A typed query is cleared
+  // by the field's own ✕; a section by the dropdown's own "All sections"; and
+  // "← All sections" is the way out of a theme. Both at once is the one state
+  // where clearing either leaves you looking at a narrowed deck and wondering
+  // why, so it keeps a button — and says both things it will undo.
   const clear = $('#browse-clear');
-  const up = upFrom(sk);
-  // Two buttons that go to the same place is one button too many: from a theme,
-  // "← All sections" already is the clear. From a section they differ — back
-  // goes up to the theme, clear goes all the way out — so both earn their place.
-  const dup = !terms.length && up && !up.to;
-  clear.hidden = !(sk || terms.length) || dup;
-  clear.textContent = sk && terms.length ? 'Clear search and filter'
-    : terms.length ? 'Clear search' : 'Clear filter';
+  clear.hidden = !(sk && terms.length);
 
   // A search that finds nothing here may still find something in the deck.
   const wide = $('#browse-wide');
@@ -4933,14 +5059,17 @@ function renderBrowse() {
     wide.textContent = `Search all ${n(all)} cards instead — ${n(elsewhere)} match${elsewhere === 1 ? '' : 'es'}`;
   }
 
-  // Filtering to a section is usually an attempt to work through it.
+  // Filtering to a section is usually an attempt to work through it. The name
+  // is not repeated on it: the dropdown two lines above is already showing it,
+  // and spelled out the label wrapped this line to four rows on a phone.
   const study = $('#browse-study');
   const studiable = sk && sk !== LEECH_FILTER && !terms.length && hits.length;
   study.hidden = !studiable;
-  if (studiable) study.textContent = `Study ${scopeName(sk)} →`;
+  if (studiable) study.textContent = isGroup(sk) ? 'Study this theme →' : 'Study this section →';
 
   // Up one level, which is not the same offer as Clear filter: from a section
   // you almost always want its neighbours in the same theme, not all 537 cards.
+  const up = upFrom(sk);
   const back = $('#browse-back');
   back.hidden = !up;
   if (up) {
@@ -4963,6 +5092,7 @@ function renderBrowse() {
   const host = $('#browse-index');
   host.hidden = !index;
   list.hidden = index;
+  $('#browse-empty').hidden = index || !!hits.length;
   if (index) {
     if (!host.firstChild) renderBrowseIndex();
     $('#browse-more').hidden = true;
@@ -4976,6 +5106,8 @@ function renderBrowse() {
   $('#browse-open').hidden = !(revealable && (sk || terms.length));
   syncOpenLabel();
   if (!hits.length) {
+    const nothing = $('#browse-empty');
+    if (!nothing.firstChild) nothing.innerHTML = doodle(COURSE.fallback, 'browse-empty-art');
     $('#browse-more').hidden = true;
     return;
   }
@@ -5515,10 +5647,14 @@ function renderNotifications() {
     button.textContent = 'Notifications blocked';
     button.disabled = true;
   } else if (status.enabled) {
-    note.textContent = 'Milestones can appear when keep club is in the background. Scheduled reminders need a push service and are not available yet.';
+    // What it does, and nothing about what it does not. The second sentence
+    // here spent a line of a settings sheet apologising for a feature that has
+    // never been offered, in words ("a push service") that only mean something
+    // to whoever would have had to build it.
+    note.textContent = 'Milestones can appear when keep club is in the background.';
     button.textContent = 'Turn off milestone notifications';
   } else {
-    note.textContent = 'Allow milestone notifications when keep club is in the background. Scheduled reminders need a push service and are not available yet.';
+    note.textContent = 'Allow milestone notifications when keep club is in the background.';
     button.textContent = 'Enable milestone notifications';
   }
 }
@@ -5531,14 +5667,24 @@ function renderStats() {
   const acc = state.revTotal ? Math.round((state.revGood / state.revTotal) * 100) : null;
 
   $('#stats-sub').textContent = `${countStudiedToday()} answers today`;
-  $('#stat-tiles').innerHTML = `
-    <div class="tile"><b>${club.clubStreak}</b><span>club streak <small>— across every course</small></span></div>
-    <div class="tile"><b>${buckets.mature}</b><span>solid <small>— still there in three weeks</small></span></div>
-    <div class="tile"><b>${buckets.young + buckets.learning}</b><span>seen, not solid yet</span></div>
-    <div class="tile"><b>${buckets.new}</b><span>not started</span></div>
-    <div class="tile"><b>${acc === null ? 'n/a' : acc + '%'}</b><span>${acc === null
-        ? 'repeat cards right — not enough data yet' : 'of repeat cards you got right'}</span></div>
-    <div class="tile"><b>${n(state.revTotal)}</b><span>repeat cards answered</span></div>`;
+  // Four, not six. The two that went were the accuracy and the total behind it:
+  // on a fresh account one of them read "n/a — not enough data yet", which is a
+  // tile whose whole content is an apology, and the other said 0 about the same
+  // thing from the other side. Both are the line under the tiles, and only once
+  // the deck has handed a card back. Club streak stays first.
+  const tiles = [
+    [club.clubStreak, 'club streak <small>— across every course</small>'],
+    [buckets.mature, 'solid <small>— still there in three weeks</small>'],
+    [buckets.young + buckets.learning, 'seen, not solid yet'],
+    [buckets.new, 'not started'],
+  ];
+  $('#stat-tiles').innerHTML = tiles
+    .map(([value, say]) => `<div class="tile"><b>${value}</b><span>${say}</span></div>`)
+    .join('');
+  const repeat = $('#repeat-line');
+  repeat.hidden = acc === null;
+  repeat.textContent = acc === null ? ''
+    : `You have got ${acc}% of ${plural(state.revTotal, 'repeat card')} right.`;
 
   // forecast
   const now = Date.now();
@@ -5554,9 +5700,16 @@ function renderStats() {
   const names = ['Today', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   for (let i = 1; i < 7; i++) {
     names[i] = new Date(addCalendarDays(now, i))
-      .toLocaleDateString(undefined, { weekday: 'short' });
+      .toLocaleDateString('en-GB', { weekday: 'short' });
   }
-  $('#forecast').innerHTML = bins.map((n, i) => `
+  // Seven stubs of nothing under a dotted axis is a chart with no reading in
+  // it, and on a fresh account that is what it always is. Same element, same
+  // role="img", same computed label — one sentence instead of the drawing.
+  const anyDue = bins.some(Boolean);
+  $('#forecast').classList.toggle('none', !anyDue);
+  $('#forecast').innerHTML = !anyDue
+    ? 'Nothing is scheduled yet. Cards come back once you have answered them.'
+    : bins.map((n, i) => `
     <div class="fc-col">
       <span class="fc-n">${n || ''}</span>
       <span class="fc-bar ${n ? '' : 'empty'}" style="height:${n ? Math.max(6, (n / peak) * 68) : 3}px"></span>
@@ -5595,34 +5748,103 @@ function renderStats() {
       + `<ul class="mastery">${rows}</ul>`;
   }).join('');
 
+  renderClubMoments();
+  renderAch();
+  // The setup sheet is a different room now, but it is still drawn from this
+  // deck's own numbers — the build line counts these cards, the exam hint is
+  // worked out over them — so a visit to Progress refreshes it too. Doing it
+  // here as well as in openSetup() costs a handful of writes to elements
+  // nobody is looking at, and buys the guarantee that what the sheet says is
+  // never older than the last time the deck under it changed.
+  renderSetup();
+}
+
+/* Everything inside the setup sheet, drawn from the state under it.
+ *
+ * Called from openSetup(), because the sheet opens from all three tabs and two
+ * of them never render Progress at all — and from renderStats(), because these
+ * are still the deck's own numbers and Progress is where the deck's numbers
+ * are re-counted. Re-asked rather than done once at boot: on a first load the
+ * service worker registration is still being made when the app finishes
+ * starting, and the answers install/offline give depend on it. */
+function renderSetup() {
+  // First, because the theme is the one setting in here that something else can
+  // change while the sheet is shut. The picker carries its own toggle, and the
+  // glyph followed it home while the word beside it did not: a plainly dark app
+  // whose Theme row read "light" and whose label offered to switch you to the
+  // colour you were already in. The row is re-read from the theme, not from
+  // whatever it was showing the last time it was opened.
+  applyTheme();
   $('#set-new').value = state.settings.newPerDay;
   $('#set-max').value = state.settings.maxRev;
   $('#set-shuffle').checked = state.settings.shuffle;
-  $('#set-font').value = state.settings.fontSize;
   $('#set-exam').value = state.settings.examDate || '';
   const d = daysToExam();
-  $('#exam-hint').textContent = d === null
-    ? `Add your exam date and the app works out how many new cards a day you need to see ${
-      DECK.cards.length === 1 ? 'it' : `all ${n(DECK.cards.length)}`} in time.`
+  // Nothing at all when there is no date. The line that used to stand here was
+  // the exam ask from Home said again in other words, on a control whose own
+  // label already says what it is for.
+  // Not the date: the control ten pixels to the right of this line is the date,
+  // and printing it here as well left one fact stated twice in two formats in
+  // the row whose job is to hold it once. What the label says is what the
+  // control cannot — what setting it does to the spacing.
+  $('#exam-hint').textContent = d === null ? ''
     : d < 0 ? 'That date has passed. Clear it to go back to normal spacing.'
-      : `${longDate(state.settings.examDate)}. No card will be left longer than ${fmtDays(ceiling())} between reviews.`;
+      : `No card will be left longer than ${fmtDays(ceiling())} between reviews.`;
   const auto = newBudget();
   $('#new-hint').textContent = auto > state.settings.newPerDay
     ? `Raised to ${auto} a day to get through the deck before your exam.`
     : '';
-  $('#build-line').textContent = `Deck build ${DECK.buildFingerprint || 'unknown'} · ${
-    plural(DECK.cards.length, 'card')}`;
-  renderClubMoments();
-  renderAch();
-  // Re-asked on every visit rather than once at boot: on a first load the
-  // registration is still being made when the app finishes starting, and the
-  // answer this card gives depends on it.
+  // The count is a fact about the deck; the fingerprint is a sha shown to
+  // somebody revising for an exam. It stays where support can still ask for it.
+  const build = $('#build-line');
+  build.textContent = `${plural(DECK.cards.length, 'card')} in this deck.`;
+  build.title = `Deck build ${DECK.buildFingerprint || 'unknown'}`;
+  applyFontSize();
   renderOffline();
   renderInstall();
   renderNotifications();
   renderBackupState();
   renderDeckFileState();
   renderSyncState();
+}
+
+/** Re-draw the sheet when the state under it was replaced by another tab, a
+ *  merge or a restore, rather than leaving settings that are no longer set. */
+function renderSetupIfOpen() {
+  if (!$('#setup').hidden) renderSetup();
+}
+
+/* The dialog contract, copied from the card sheet: role, aria-modal, an inert
+ * background, Tab contained, Escape, a history entry, and focus handed back to
+ * whichever of the three headers opened it. */
+let setupOpener = null;
+
+function openSetup(opener) {
+  const panel = $('#setup');
+  if (!panel.hidden) return;
+  setupOpener = opener || null;
+  renderSetup();
+  panel.hidden = false;
+  document.body.style.overflow = 'hidden';
+  // The sheet is a sibling of #app so it is not inerting itself.
+  setBackgroundInert(true);
+  // The first thing in the sheet rather than its ✕: opening settings lands you
+  // on the group that is open, which is also what says the sheet has groups.
+  $('#setup-display').focus({ preventScroll: true });
+  pushStop('setup');
+}
+
+function closeSetup(fromHistory) {
+  const panel = $('#setup');
+  if (panel.hidden) return;
+  panel.hidden = true;
+  document.body.style.overflow = '';
+  setBackgroundInert(false);
+  if (setupOpener && setupOpener.isConnected && setupOpener.focus) {
+    setupOpener.focus({ preventScroll: true });
+  } else focusScreen(current);
+  setupOpener = null;
+  if (!fromHistory && stops[stops.length - 1] === 'setup') history.back();
 }
 
 /* ─────────────────────────── lightbox ─────────────────────────── */
@@ -5642,6 +5864,14 @@ function openLightbox(card, mediaItem, resolvedUrl) {
   img.hidden = !!isFig;
   figBox.hidden = !isFig;
   lb.node = isFig ? figBox : img;
+  // Every diagram opens where it was left, not where the last one was left.
+  // The transform stays on the node after a close, and fit() below measures the
+  // node with getBoundingClientRect() — so the zoom and pan of whatever you were
+  // last looking at were baked into the measurement of the next thing you
+  // opened, and it arrived as a postage stamp parked off the right-hand edge.
+  lb.scale = 1; lb.fit = 1; lb.tx = 0; lb.ty = 0;
+  img.style.transform = '';
+  figBox.style.transform = '';
   $('#lb-stage').dataset.kind = isFig ? 'fig' : 'img';
   if (isFig) {
     img.removeAttribute('src');
@@ -5737,6 +5967,7 @@ addEventListener('popstate', () => {
   if (top === 'lightbox') return closeLightbox(true);
   if (top === 'notes') return closeNotes(true);
   if (top === 'card-sheet') return closeCardSheet(true);
+  if (top === 'setup') return closeSetup(true);
   if (top === 'study') return leaveStudy(true);
   // A tab is one press above the course's home screen, however many tabs you
   // walked through to get to this one.
@@ -5748,6 +5979,7 @@ addEventListener('popstate', () => {
   if (!$('#lightbox').hidden) return closeLightbox(true);
   if (!$('#notes').hidden) return closeNotes(true);
   if (!$('#card-sheet').hidden) return closeCardSheet(true);
+  if (!$('#setup').hidden) return closeSetup(true);
   if (current === 'study' || current === 'done') return leaveStudy(true);
   // Nothing of ours is open, so this was one of those leftovers. Step past it —
   // and past any others under it, which `history.state` names — so that one
@@ -5766,10 +5998,22 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * zero-box elements are left out: a control in a closed branch of the sheet is
  * not a stop, and landing on one is a Tab that appears to do nothing. */
 function containTab(box, e) {
+  // `summary` is in the list because a dialog may be built out of folded
+  // groups, and a group you cannot Tab onto is a group the keyboard cannot
+  // open. The two sheets that have no summaries are unaffected.
   const focusable = Array.from(box.querySelectorAll(
-    'button:not([disabled]), a[href], textarea:not([disabled]),'
+    'button:not([disabled]), a[href], textarea:not([disabled]), summary,'
       + ' select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  )).filter((el) => !el.hidden && el.getClientRects().length);
+  )).filter((el) => {
+    if (el.hidden || !el.getClientRects().length) return false;
+    // A closed <details> is not "no box" — the browser reports rectangles for
+    // everything inside it and refuses to focus any of it. Left in, the last
+    // control in the last folded group is the one the wrap-around waits for,
+    // which is a wrap-around that never happens and a Tab that walks out of
+    // the dialog. The way into a folded group is its own summary.
+    const folded = el.closest('details:not([open])');
+    return !folded || (el.tagName === 'SUMMARY' && el.parentElement === folded);
+  });
   if (!focusable.length) return;
   const first = focusable[0], last = focusable[focusable.length - 1];
   const inside = box.contains(document.activeElement);
@@ -6024,7 +6268,14 @@ function applyTheme() {
   MuninTheme.apply();
   // What it says, not what was chosen: light is light whether you picked it or
   // simply never picked anything, and the button offers the other one either way.
-  $('#theme-btn').title = `Colour theme: ${MuninTheme.showing()}`;
+  const showing = MuninTheme.showing();
+  $('#theme-btn').title = `Colour theme: ${showing}`;
+  // In the sheet the drawing has room for its own name beside it, so the
+  // control says which colour you are in as well as drawing it. The label the
+  // button is read out under says what pressing it does.
+  $('#theme-name').textContent = showing;
+  $('#theme-btn').setAttribute('aria-label',
+    `Colour theme: ${showing}. Switch to ${showing === 'dark' ? 'light' : 'dark'}.`);
 }
 
 /* Text size, unlike the theme, IS the course's — it rides in the review
@@ -6042,6 +6293,15 @@ function applyTheme() {
  * Setting it any later is a flash of 15px type on a phone that asked for 19. */
 function applyFontSize() {
   document.documentElement.setAttribute('data-font', state.settings.fontSize);
+  // The five buttons are marked from the same value the attribute is written
+  // from, here rather than in the sheet's own render, so the control is
+  // standing on the right step whoever changed it — this tab, another tab, a
+  // merge, a restored backup — and before the sheet has ever been opened.
+  for (const b of $$('#set-font button')) {
+    const on = b.dataset.fontStep === state.settings.fontSize;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
 }
 
 /* ─────────────────────────── wiring ─────────────────────────── */
@@ -6115,6 +6375,23 @@ function wire() {
   $('#theme-btn').addEventListener('click', () => {
     MuninTheme.cycle();
     applyTheme();
+  });
+
+  // One control, drawn into all three headers, so there is no tab from which
+  // the theme or the text size cannot be reached.
+  $$('.setup-btn').forEach((b) =>
+    b.addEventListener('click', (e) => openSetup(e.currentTarget)));
+  // The exam banner is rebuilt on every render, so its own way into the sheet
+  // is delegated rather than wired to a button that will not be there long.
+  $('#exam-banner').addEventListener('click', (e) => {
+    const link = e.target.closest('[data-open-setup]');
+    if (link) openSetup(link);
+  });
+  $('#setup-close').addEventListener('click', () => closeSetup(false));
+  // Off the sheet closes it, the same test the card sheet uses: this click
+  // landed on the backdrop, rather than this click did not land inside it.
+  $('#setup').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeSetup(false);
   });
 
   $('#notes-open').addEventListener('click', (e) => openNotes(e.currentTarget));
@@ -6307,7 +6584,12 @@ function wire() {
   // index is rebuilt wholesale, and a listener per button would have to be too.
   $('#browse-index').addEventListener('click', (e) => {
     const b = e.target.closest('[data-scope]');
-    if (b) goScope(b.dataset.scope);
+    if (!b) return;
+    // The theme's own "N cards →" sits inside the summary, so pressing it would
+    // fold the theme shut on the way out — and folding it is not what it says
+    // it does. The tiles are outside the summary and this costs them nothing.
+    e.preventDefault();
+    goScope(b.dataset.scope);
   });
   $('#browse-open').addEventListener('click', () => {
     const rows = $$('#browse-list details');
@@ -6346,6 +6628,13 @@ function wire() {
       + ` · showing ${n(Math.min(browseLimit, browseHits.length))}`);
   });
 
+  // Unfolds the log for as long as the tab is up. Not remembered: the fold is
+  // about the first thing you see, and the next visit is a first thing again.
+  $('#ach-more').addEventListener('click', (e) => {
+    $('#ach-list').classList.remove('folded');
+    e.currentTarget.hidden = true;
+  });
+
   $('#set-new').addEventListener('change', (e) => {
     state.settings.newPerDay = clamp(parseInt(e.target.value, 10) || 0, 0, 200);
     e.target.value = state.settings.newPerDay;
@@ -6360,15 +6649,18 @@ function wire() {
     state.settings.shuffle = e.target.checked;
     save();
   });
-  $('#set-font').addEventListener('change', (e) => {
+  // Delegated across the five steps rather than one listener each: they are one
+  // control with five positions, and the group is what the app names.
+  $('#set-font').addEventListener('click', (e) => {
+    const step = e.target.closest('[data-font-step]');
+    if (!step) return;
     // Applied before the save, not after it: the save is debounced and the
     // refusal path can send it back, and either way this is a control whose
     // whole point is that you see the answer in the same breath as the change.
-    // A value the <select> could not have produced still goes through the same
-    // list the sanitiser uses — nothing writes an attribute unchecked.
-    const want = FONT_SIZES.includes(e.target.value) ? e.target.value : FONT_DEFAULT;
+    // A value no button could have produced still goes through the same list
+    // the sanitiser uses — nothing writes an attribute unchecked.
+    const want = FONT_SIZES.includes(step.dataset.fontStep) ? step.dataset.fontStep : FONT_DEFAULT;
     state.settings.fontSize = want;
-    e.target.value = want;
     applyFontSize();
     save();
   });
@@ -6419,7 +6711,7 @@ function wire() {
     state.settings.examSkipped = true;
     if (save()) {
       renderHome();
-      toast('You can add a date later in Progress.');
+      toast('You can add a date later in Settings.');
     }
   });
   $('#leech-row').addEventListener('click', () => {
@@ -6996,6 +7288,12 @@ function wire() {
       if (e.key === 'Tab') containTab($('#card-sheet'), e);
       return;
     }
+    /* The setup sheet, the same dialog contract once more. */
+    if (!$('#setup').hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeSetup(false); return; }
+      if (e.key === 'Tab') containTab($('#setup'), e);
+      return;
+    }
     if (typing) return;
     if (current !== 'study') return;
     // A control that has focus gets its own key. This guard exempted form
@@ -7092,9 +7390,12 @@ function renderOffline() {
   // registration — was told the cards already worked offline, above a button
   // that could not save a thing.
   const say = (worker) => {
+    // The line that used to open this said the cards work offline once you
+    // have opened the app, which is the app describing itself rather than
+    // telling you anything you can act on. What is left is the deck's own
+    // count and the one decision it asks for.
     $('#offline-note').textContent = worker
-      ? `The cards work offline as soon as you have opened the app once. `
-        + `The ${shots.size} diagram${many ? 's are' : ' is'} saved as you meet ${many ? 'them' : 'it'} — `
+      ? `The ${shots.size} diagram${many ? 's are' : ' is'} saved as you meet ${many ? 'them' : 'it'} — `
         + `pull ${many ? 'them all' : 'it'} down now if you are heading somewhere without signal.`
       : `This browser has not stored the app, so the cards and the ${many ? 'diagrams' : 'diagram'} `
         + `need a signal. Open it once more with one — a private window will never keep it. `
