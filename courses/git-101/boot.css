@@ -1,0 +1,27 @@
+.boot-git-101 {
+  width: 52px;
+  height: 52px;
+  color: var(--accent);
+  animation: boot-git-101-grow 2s ease-in-out infinite;
+}
+.boot-git-101 path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: boot-git-101-draw .6s ease-out forwards;
+}
+@keyframes boot-git-101-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes boot-git-101-grow {
+  0%, 100% { transform: scale(.96) rotate(-2deg); }
+  50% { transform: scale(1.04) rotate(2deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-git-101,
+  .boot-git-101 path {
+    animation: none;
+  }
+  .boot-git-101 path {
+    stroke-dashoffset: 0;
+  }
+}

@@ -1,0 +1,133 @@
+{
+ "id": "git-101",
+ "title": "Git 101",
+ "short": "Git 101",
+ "tagline": "first commit to agent crews",
+ "accent": {
+  "light": "#a63a1b",
+  "dark": "#ffb8a6",
+  "inkLight": "#fffdf7",
+  "inkDark": "#141519"
+ },
+ "boot": {
+  "art": "git-branch",
+  "line": "Growing your history…"
+ },
+ "fallback": "git-commit",
+ "shelfArt": "git-branch",
+ "sectionArt": {
+  "mental-model": "git-commit",
+  "setup": "git-terminal",
+  "everyday-loop": "git-stage",
+  "see-changes": "git-history",
+  "branches": "git-branch",
+  "merge-conflicts": "git-merge",
+  "remotes": "git-remote",
+  "team-workflow": "git-review",
+  "undo": "git-undo",
+  "advanced-tools": "git-tools",
+  "investigate-release": "git-tag",
+  "agent-contract": "git-agent",
+  "agent-context": "git-context",
+  "parallel-agents": "git-worktree",
+  "agent-review": "git-shield"
+ },
+ "groupArt": {
+  "foundations": "git-commit",
+  "collaboration": "git-merge",
+  "recovery": "git-undo",
+  "agentic": "git-agent"
+ },
+ "friezeArt": [
+  "git-commit",
+  "git-stage",
+  "git-branch",
+  "git-merge",
+  "git-remote",
+  "git-review",
+  "git-tag",
+  "git-agent",
+  "git-worktree",
+  "git-shield"
+ ],
+ "notice": "A practical memory deck for modern Git. Try destructive and history-rewriting commands in a disposable repository first. Agentic sections describe durable 2026 workflows, not one vendor's interface.",
+ "figures": {
+  "noPen": []
+ },
+ "hoard": {
+  "title": "Contribution graph",
+  "items": {
+   "cast-off": {
+    "title": "first commit",
+    "description": "answered your first card",
+    "art": "git-commit"
+   },
+   "underway": {
+    "title": "steady contributor",
+    "description": "50 cards answered",
+    "art": "git-stage"
+   },
+   "offshore": {
+    "title": "history keeper",
+    "description": "250 cards answered",
+    "art": "git-history"
+   },
+   "blue-water": {
+    "title": "repository elder",
+    "description": "1,000 cards answered",
+    "art": "git-tools"
+   },
+   "streak-3": {
+    "title": "three-day branch",
+    "description": "studied three days in a row",
+    "art": "git-branch"
+   },
+   "streak-7": {
+    "title": "week-long graph",
+    "description": "seven days in a row",
+    "art": "git-history"
+   },
+   "streak-14": {
+    "title": "fortnight upstream",
+    "description": "fourteen days in a row",
+    "art": "git-remote"
+   },
+   "clean-run": {
+    "title": "clean worktree",
+    "description": "20 in a row without an again",
+    "art": "git-shield"
+   },
+   "night-watch": {
+    "title": "nightly build",
+    "description": "answered a card between midnight and four",
+    "art": "git-terminal"
+   },
+   "dawn-patrol": {
+    "title": "early fetch",
+    "description": "answered a card before six in the morning",
+    "art": "git-remote"
+   },
+   "all-sections": {
+    "title": "full graph",
+    "description": "started every section in the deck",
+    "art": "git-merge"
+   },
+   "section-swept": {
+    "title": "branch complete",
+    "description": "seen every card in one section",
+    "art": "git-review"
+   },
+   "knot-untangled": {
+    "title": "conflict resolved",
+    "description": "a card that kept slipping is solid again",
+    "art": "git-undo"
+   },
+   "deck-met": {
+    "title": "every commit visited",
+    "description": "seen every card in the deck at least once",
+    "art": "git-agent"
+   }
+  }
+ },
+ "shelfPath": "M8 4C5.8 4 4 5.8 4 8C4 9.8 5.2 11.4 7 11.9V20.1C5.2 20.6 4 22.2 4 24C4 26.2 5.8 28 8 28C10.2 28 12 26.2 12 24C12 22.2 10.8 20.6 9 20.1V17C13.8 17 18 14.6 20.6 10.9C21.3 11.6 22.3 12 23.5 12C26 12 28 10 28 7.5C28 5 26 3 23.5 3C21 3 19 5 19 7.5C19 8.1 19.1 8.6 19.3 9.1C17.1 12.5 13.4 15 9 15V11.9C10.8 11.4 12 9.8 12 8C12 5.8 10.2 4 8 4Z"
+}

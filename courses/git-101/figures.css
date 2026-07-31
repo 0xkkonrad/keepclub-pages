@@ -1,0 +1,19 @@
+/* Git 101's figure nouns. The shared line and label language stays in app.css. */
+.figure .f-panel {
+  fill: var(--surface-2);
+  stroke: var(--accent);
+  stroke-width: 1.4;
+}
+.figure .f-node {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.figure .f-label {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 1.4;
+}
+.figure .f-arrow {
+  stroke-width: 1.8;
+}
