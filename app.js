@@ -2678,10 +2678,16 @@ function writeCardLayer() {
 
 let courseMarkdownModule = null;
 let courseRuntimeModule = null;
+let courseExportModule = null;
 const courseMarkdown = () =>
   (courseMarkdownModule ||= import('./lib/course-markdown.js'));
 const courseRuntime = () =>
   (courseRuntimeModule ||= import('./lib/course-runtime.js'));
+// The writer, and through it the reader that checks what it wrote. Asked for
+// only when Progress is drawn: nobody studying a deck should be paying for a
+// YAML emitter on the boot path.
+const courseExport = () =>
+  (courseExportModule ||= import('./lib/course-export.js'));
 
 /** One stored side, as the sanitized HTML the rest of the app draws.
  *
@@ -5073,6 +5079,191 @@ function renderBackupState() {
     : 'Nothing to back up yet — study some cards first.';
 }
 
+/* ── the deck file ── */
+
+/* A course file written on the device, out of this deck.
+ *
+ * The other half of a promise the card release made and could not keep: cards
+ * somebody writes live in one browser profile and in the backup file, and the
+ * backup is stamped for one deck on one device and refused by any other. This
+ * is the file that goes anywhere, and it is the format the app already reads,
+ * so what comes out is checked by the thing that will have to take it back.
+ *
+ * Nothing here writes. The export reads COURSE.deck and cardLayer, both already
+ * in memory, and touches neither — so there is no lease to take, no writeNow()
+ * to flush, and exporting during an open session is allowed. It must also never
+ * re-read the layer first: loadCardLayer() mid-session replaces cardLayer
+ * without the applyCardLayer() that keeps DECK in step, which is the one thing
+ * the storage listener already refuses to do while a session is open. The file
+ * is what this tab is showing, which is the only thing it can honestly be.
+ */
+
+/** Which of the two files this deck can produce — the answer to a question
+ *  about the stored document and the format it is in, neither of which moves
+ *  while the deck is open. Worked out once; the counts on the line below it are
+ *  counted on every draw, because those do move. */
+let deckFile = null;
+let deckFileBroken = false;
+// One file at a time, and the button's own label while it is written. No
+// spinner and no bar: a bar with nothing behind it is worse than a word, and
+// the only deck big enough to need one is the Anki import, which never takes
+// the whole-deck path.
+let deckExporting = false;
+
+async function readyDeckFile() {
+  if (deckFile || deckFileBroken) return deckFile;
+  try {
+    const { deckFileShape } = await courseExport();
+    deckFile = deckFileShape({
+      sourceFormat: RUNTIME_SOURCE_FORMAT,
+      stored: (globalThis.COURSE && COURSE.deck) || null,
+      own: !!(globalThis.COURSE && COURSE.own),
+    });
+  } catch (e) {
+    console.error(e);
+    deckFileBroken = true;
+  }
+  return deckFile;
+}
+
+/** The assets that keep a deck from going out whole, in the words for what they
+ *  actually are. A deck of bird calls carries recordings, not pictures. */
+function assetWords(assets) {
+  const said = [];
+  if (assets.pictures) said.push(plural(assets.pictures, 'picture'));
+  if (assets.sounds) said.push(plural(assets.sounds, 'sound file'));
+  if (assets.clips) said.push(plural(assets.clips, 'clip'));
+  return listWords(said);
+}
+
+/** Whose work this deck is, where its own document says so.
+ *
+ * A whole-deck export of a course somebody else wrote carries their `authors`
+ * and `license` through untouched, and the line above the button names them:
+ * handing on another person's course is exactly the moment to say whose it is.
+ * Where the document claims neither, this says nothing rather than inventing
+ * something. */
+function deckFileAttribution(stored) {
+  const names = (Array.isArray(stored && stored.authors) ? stored.authors : [])
+    .map((author) => (author && typeof author.name === 'string' ? author.name : ''))
+    .filter(Boolean);
+  const licence = stored && isPlainObject(stored.license)
+    ? (typeof stored.license.identifier === 'string' ? stored.license.identifier
+      : typeof stored.license.name === 'string' ? stored.license.name : '')
+    : '';
+  if (names.length && licence) {
+    return ` This deck is ${listWords(names)}’s work, under ${licence}. `
+      + 'The file carries that with it.';
+  }
+  if (names.length) {
+    return ` This deck is ${listWords(names)}’s work. The file carries that with it.`;
+  }
+  if (licence) return ` This deck is under ${licence}. The file carries that with it.`;
+  return '';
+}
+
+/** What a file made right now would and would not hold, one sentence per case,
+ *  with the reason before the consequence.
+ *
+ * Every number is derived on the spot off the same functions the rest of the
+ * screen counts with, so this line moves the moment a card is written — like
+ * every other derived number in the app. */
+function deckFileSays() {
+  /* THIS ANSWER FIRST, whatever the deck is.
+   *
+   * With the cards document unread, every count below is a count of nothing —
+   * writtenCardCount(), liveCardCount() and hiddenCards() all read the layer —
+   * so this line would tell somebody who has written fourteen cards that they
+   * have written none, and then send them to Browse, where the first card
+   * written replaces the document that would not open. It is the same refusal
+   * the button gives, said before the button rather than after it. */
+  if (!cardLayerLoaded) {
+    return 'The cards you wrote into this deck could not be read, so a file made now '
+      + 'would be missing them, and none will be written.';
+  }
+  const written = writtenCardCount();
+  const overridden = liveCardCount() - written;
+  const hidden = hiddenCards().length;
+  const yours = written + overridden;
+  const stored = (globalThis.COURSE && COURSE.deck) || null;
+
+  if (deckFile.kind === 'layer') {
+    if (!yours) {
+      return 'You have not written or changed a card in this deck yet, so there is '
+        + 'nothing of yours to put in a file. Browse is where you write one.';
+    }
+    const holds = [];
+    if (written) holds.push(`the ${plural(written, 'card')} you wrote`);
+    if (overridden) {
+      holds.push(deckFile.why === 'built-in'
+        ? `the ${overridden} of this course’s that you changed`
+        : `the ${plural(overridden, 'card')} you changed`);
+    }
+    const opening = `A file now would hold ${listWords(holds)}.`;
+    if (deckFile.why === 'built-in') {
+      const named = (globalThis.COURSE && COURSE.short) || DECK.title;
+      return `${opening} ${named}’s own cards are its author’s work, so they stay here.`;
+    }
+    if (deckFile.why === 'anki') {
+      return `${opening} The rest came out of an Anki file and keep club keeps it as it `
+        + 'was drawn rather than as it was written, so it cannot be written back out. '
+        + 'The .apkg you imported is still that copy.';
+    }
+    const carrier = deckFile.assets.onCards ? 'The deck’s own cards carry' : 'The deck carries';
+    return `${opening} ${carrier} ${assetWords(deckFile.assets)}, `
+      + 'and a course file written here is text only.';
+  }
+
+  const total = plural(DECK.cards.length, 'card');
+  // A hide is not in the file — a course file has no way to say "not this card"
+  // — so the cards that were hidden are simply absent, and a line claiming the
+  // deck came out whole would be counting cards that are not in it.
+  const without = hidden
+    ? ` The ${plural(hidden, 'card')} you hid ${hidden === 1 ? 'is' : 'are'} not in it.`
+    : '';
+  if (deckFile.own) {
+    return `A file now would hold all ${total} in this deck.${without} It is the only file `
+      + 'that does: a backup holds what you have answered and what you have written, '
+      + 'never the deck.';
+  }
+  const attribution = deckFileAttribution(stored);
+  if (!yours && !hidden) {
+    return `A file now would hold all ${total} in this deck, exactly as they came in.`
+      + attribution;
+  }
+  // What the fork is guarding is whatever this file has of yours in it, and a
+  // file with cards taken out of it has one thing: the taking out.
+  const mine = yours
+    ? `: the deck’s own, and the ${plural(yours, 'card')} you have written or edited.`
+    : '.';
+  const risk = yours ? 'take yours with it' : 'put back what you took out';
+  return `A file now would hold all ${total} in this deck${mine}${without} It goes out under `
+    + 'a name and a course ID of its own, so that an update from the deck’s author can '
+    + `never replace it and ${risk}.${attribution}`;
+}
+
+function renderDeckFileState() {
+  const el = $('#deck-file-state');
+  const btn = $('#deck-export-btn');
+  if (!el || !btn || !DECK) return;
+  if (deckFileBroken) {
+    el.textContent = 'keep club could not load the part of itself that writes deck files. '
+      + 'Reloading the app is what fixes that.';
+    btn.hidden = true;
+    return;
+  }
+  if (!deckFile) { readyDeckFile().then(renderDeckFileState); return; }
+  el.textContent = deckFileSays();
+  // Never disabled, for the reason "Write a card" is never hidden: a control
+  // that is not there cannot say why, and the refusal it would give names the
+  // way out.
+  if (!deckExporting) {
+    btn.textContent = deckFile.kind === 'whole'
+      ? 'Export this deck' : 'Export the cards you wrote';
+  }
+  btn.hidden = false;
+}
+
 /* ── sync ── */
 
 function agoText(ts) {
@@ -5430,6 +5621,7 @@ function renderStats() {
   renderInstall();
   renderNotifications();
   renderBackupState();
+  renderDeckFileState();
   renderSyncState();
 }
 
@@ -6361,6 +6553,107 @@ function wire() {
       ? `Exported ${listWords(held)}.`
       : 'Exported your settings — there is nothing else in this deck yet.');
     renderBackupState();
+  });
+
+  $('#deck-export-btn').addEventListener('click', async () => {
+    const btn = $('#deck-export-btn');
+    if (deckExporting || !deckFile) return;
+
+    /* THIS REFUSAL FIRST, whatever else is wrong.
+     *
+     * With the layer unreadable, liveCardCount() is 0 and every count below is
+     * a count of nothing — so a file written over it comes out short and looks
+     * like proof there was nothing there, and the refusal that would otherwise
+     * fire would tell somebody who has written fourteen cards that they have
+     * written none. */
+    if (!cardLayerLoaded) {
+      toast('The cards you wrote into this deck could not be read, so a file made now '
+        + 'would be missing them. Nothing was exported.', true);
+      return;
+    }
+    if (deckFile.kind === 'layer' && liveCardCount() === 0) {
+      toast('You have not written or changed a card in this deck, so a file of your '
+        + 'cards would be empty. Browse is where you write one.');
+      return;
+    }
+    // share.js's guard rather than a try/catch around the click: some in-app
+    // browsers have no createObjectURL at all, and there is no point writing a
+    // file this page cannot hand over.
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      toast('This browser will not let keep club hand you a file. Some in-app browsers '
+        + 'block downloads; opening keep club in your own browser will work.', true);
+      return;
+    }
+
+    const label = btn.textContent;
+    // Disabling the button a keyboard is on drops focus onto the body, and
+    // enabling it again does not put it back: the next Tab would restart at the
+    // top of the document, one press after the control it was on.
+    const held = document.activeElement === btn;
+    deckExporting = true;
+    btn.disabled = true;
+    btn.textContent = 'Writing the file…';
+    let written;
+    try {
+      const { writeCourseFile } = await courseExport();
+      written = await writeCourseFile({
+        kind: deckFile.kind,
+        stored: (globalThis.COURSE && COURSE.deck) || null,
+        shipped: shippedCourse,
+        layer: cardLayer,
+        own: deckFile.own,
+        now: new Date(),
+      });
+    } catch (e) {
+      console.error(e);
+      written = { ok: false, say: '' };
+    }
+    deckExporting = false;
+    btn.disabled = false;
+    btn.textContent = label;
+    if (held && document.activeElement === document.body) btn.focus();
+
+    if (!written.ok) {
+      // The reader's own words, in the shape the card sheet and the importer
+      // both print. Reaching this is a bug in the exporter and not something
+      // the person did, which is exactly why it is a sentence rather than a
+      // thrown error: an app that stops has told them nothing.
+      toast('keep club could not write a course file from this deck, so nothing was '
+        + `downloaded.${written.say ? ' ' + written.say : ''}`, true);
+      return;
+    }
+
+    // The backup's own mechanics, twenty lines above: Blob, anchor, download,
+    // click, and the URL revoked after four seconds rather than at once, or a
+    // download that has not started yet loses the file it was going to fetch.
+    const blob = new Blob([written.text], { type: 'text/yaml;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = written.fileName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+    const yours = written.counts.written + written.counts.overridden;
+    const said = written.kind === 'whole'
+      ? `Exported all ${plural(written.counts.cards, 'card')} in this deck${
+        yours ? `, including the ${written.counts.overridden
+          ? `${plural(yours, 'card')} you have written or edited`
+          : `${plural(yours, 'card')} you wrote`}` : ''}, as ${written.fileName}.`
+      : `Exported the ${plural(yours, 'card')} you have written or edited, `
+        + `as ${written.fileName}.`;
+    // Not a refusal, and it is downloaded either way: withholding somebody's
+    // own words over a limit of ours is not on. Sticky, because it is the one
+    // sentence that says why the file they just made will not open here.
+    if (written.overLimit) {
+      toast(`${said} That file is ${(written.bytes / 1e6).toFixed(1)} MB. keep club will `
+        + 'not read a course file over 5 MB back in, so it will open in a text editor '
+        + 'but not in this app.', true);
+      return;
+    }
+    toast(said);
   });
 
   $('#import-btn').addEventListener('click', () => {

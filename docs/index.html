@@ -433,6 +433,17 @@ cards:
           <li>Scheduling, streaks, due dates, and learner history never belong
             in a course artifact.</li>
         </ul>
+        <p>keep club writes this format as well as reading it. Progress → deck
+          file exports the open deck as a <code>.keep.yml</code>, checked
+          against this contract before the download starts. What comes out is a
+          course file and nothing more: no review history, no notes, and no
+          record of hidden cards. A deck stored as sanitized HTML — a built-in
+          course or an Anki import — exports only the cards the reader wrote or
+          changed, and a deck with packaged media exports the same, because a
+          <code>.keep.yml</code> is text and its assets would not travel with
+          it. An exported file carries
+          <code>extensions: app.keepclub/export</code> naming which of the two
+          it is and the course it came from.</p>
       </section>
 
       <section id="evolution">

@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: 'c3003f40f0', courses: { 'day-skipper': '6eca634293', 'competent-crew': 'a8edcff6e3' } };
+const BUILD = { shell: '34c9aac86b', courses: { 'day-skipper': '6eca634293', 'competent-crew': 'a8edcff6e3' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -130,6 +130,13 @@ const SHELL = [
   'lib/course-markdown.js',
   'lib/course-media.js',
   'lib/course-yaml.js',
+  // The public course-file boundary, both ways. It was already the importer's
+  // front door for .keep and .keep.yml and had never been listed here, so
+  // reading a course file off your own disk was the one importer path that
+  // needed a network. It is now also the reader the exporter's own gate runs
+  // its file through, on a screen that must work on a train.
+  'lib/course-package.js',
+  'lib/course-export.js',
   'lib/vendor/commonmark-parser-0.31.2.min.js',
   'lib/vendor/yaml-2.9.0.min.js',
   'lib/receipt.js',

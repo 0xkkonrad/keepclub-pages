@@ -411,6 +411,26 @@
       </div>
       <button class="danger" id="reset-btn">Erase all progress</button>
 
+      <!-- Directly under Backup, because the whole risk with this section is
+           that it reads as a second one, so the copy leads with the
+           difference. The button carries no label until renderDeckFileState()
+           has worked out which of the two files this deck can honestly
+           produce: a button labelled "Export this deck" for one second and
+           "Export the cards you wrote" the next is worse than a button that
+           arrives a frame late. -->
+      <h2 class="h-sect">Deck file</h2>
+      <p class="fineprint">
+        A backup goes back into this deck on this device. A deck file is the
+        cards themselves, in the format keep club reads and writes, so it opens
+        on another device, in another browser, or in a text editor. It carries
+        no review history and no notes: course files never do. Importing one is
+        not a restore. A file with your cards in it comes back as a second deck.
+        A file that is only the deck as it came in is the same course, so
+        importing it here updates this deck instead.
+      </p>
+      <p class="backup-state" id="deck-file-state"></p>
+      <div class="btn-row"><button class="ghost" id="deck-export-btn" hidden></button></div>
+
       <h2 class="h-sect">About</h2>
       <div class="about">
         <p id="about-copy">keep club is a small open-source flashcard app by
