@@ -3,6 +3,7 @@
  "title": "Git 101",
  "short": "Git 101",
  "tagline": "first commit to agent crews",
+ "exam": false,
  "accent": {
   "light": "#a63a1b",
   "dark": "#ffb8a6",

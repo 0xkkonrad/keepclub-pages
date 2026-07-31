@@ -89,6 +89,10 @@ const EXPORT_FORMAT = 1;
 // install starts there rather than asking. It is changed in Settings, and
 // clearing it goes back to plain spacing. No date in the course → no default.
 const EXAM_DEFAULT = (typeof COURSE.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(COURSE.examDate)) ? COURSE.examDate : '';
+// Not every course is sat. `"exam": false` in course.json takes the ask, the
+// Settings row and the countdown off that course altogether; absent means yes,
+// so a course that says nothing keeps what it has always had.
+const EXAM_ON = COURSE.exam !== false;
 // A <input type="date"> fires `change` on every keystroke in the year segment,
 // so typing 2026 walks through 0002, 0020 and 0202 on its way. Anything outside
 // this window is someone mid-keystroke, not a date they mean.
@@ -731,6 +735,9 @@ function newBudget() {
 
 /** Whole days from today to the exam, or null if no date is set. */
 function daysToExam() {
+  // A course with no exam has no countdown, whatever a restored backup or a
+  // synced settings block happens to carry in this field.
+  if (!EXAM_ON) return null;
   const d = state.settings.examDate;
   if (!d) return null;
   const t = Date.parse(d + 'T00:00:00');
@@ -1974,7 +1981,7 @@ function renderAskExam() {
   // Shown until a date is set or the prompt is dismissed — not just on day one.
   // Booking the exam a week in is the common case, and by then a "seen === 0"
   // prompt would be long gone with no way back to it except the third tab.
-  $('#ask-exam').hidden = !!(state.settings.examDate || state.settings.examSkipped);
+  $('#ask-exam').hidden = !EXAM_ON || !!(state.settings.examDate || state.settings.examSkipped);
 }
 
 /** True once this has printed a pacing sentence of its own, which is the note
@@ -5778,6 +5785,7 @@ function renderSetup() {
   $('#set-new').value = state.settings.newPerDay;
   $('#set-max').value = state.settings.maxRev;
   $('#set-shuffle').checked = state.settings.shuffle;
+  $('#exam-row').hidden = !EXAM_ON;
   $('#set-exam').value = state.settings.examDate || '';
   const d = daysToExam();
   // Nothing at all when there is no date. The line that used to stand here was
