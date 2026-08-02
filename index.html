@@ -467,6 +467,10 @@
          markup the subset cannot express simplifies when it is edited, and
          finding that out from the result is finding it out too late. -->
     <p class="sheet-warn" id="card-warn" hidden></p>
+    <!-- Validation belongs beside the boxes, not below a form taller than a
+         phone viewport. The live region stays mounted so an async reader can
+         report without moving focus to the document floor. -->
+    <p class="sheet-say" id="card-say" role="status" aria-live="polite"></p>
     <form class="sheet-form" id="card-form">
       <!-- The app's word is question, not front. maxlength matches app.js's
            CARD_LEN; the sanitiser cuts to the same length whatever the browser
@@ -487,9 +491,6 @@
         <button class="link-btn" id="card-cancel" type="button">Cancel</button>
       </div>
     </form>
-    <!-- Everything this sheet has to say, said inside it: it covers the toast,
-         and a message about the card you just typed belongs beside it. -->
-    <p class="sheet-say" id="card-say" role="status" aria-live="polite"></p>
     <ol class="sheet-diags" id="card-diags" hidden></ol>
     <!-- Taking a card out lives here rather than on the Browse row, so there is
          one confirm, one refusal and one place that knows about the session. -->

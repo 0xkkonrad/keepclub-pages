@@ -560,7 +560,7 @@ export function openImporter() {
                emphasised word inside one of these lines would simply not be
                there. -->
           <li class="said"><b></b><span>Browse is where you write the next card, and every
-            card after it — “Write a card” is at the top of the list</span></li>
+            card after it — choose “New card” at the end of the list</span></li>
           <li class="said"><b></b><span>a deck you wrote does not sync, and this device is
             the only place it exists — Settings → export a backup keeps what you have
             answered and the cards you add next, not the deck</span></li>

@@ -474,6 +474,10 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .primary.big { min-height: 54px; }
 .primary:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--stroke); }
 .primary:disabled { background: var(--surface-2); color: var(--muted); box-shadow: none; transform: none; }
+.primary[aria-disabled="true"] {
+  background: var(--surface-2); color: var(--muted); box-shadow: none; transform: none;
+}
+textarea[aria-invalid="true"], input[aria-invalid="true"] { border-color: var(--g1); }
 
 .ghost {
   min-height: var(--tap); padding: 0 16px;
@@ -644,6 +648,15 @@ details.part > summary.h-part { align-items: center; min-height: var(--tap); }
   #reveal-btn, .grade { min-height: 44px; }
   .dock-foot { margin-top: 1px; }
   .dock-foot .link-btn { min-height: 36px; padding-block: 4px; }
+}
+
+/* At high text sizes a short landscape/zoomed viewport left the fixed study
+   header and dock less than one line of card space between them. Reflow the
+   study screen into one scroll surface: the answer can take the height it
+   needs and the grading dock follows it in reading order. */
+@media (max-height: 400px) {
+  #s-study { display: block; overflow-y: auto; }
+  #s-study .card-body { overflow: visible; min-height: auto; }
 }
 
 .banner {
@@ -1155,7 +1168,7 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
 #browse-wide { flex: 1 0 100%; margin-left: 0; text-align: left; }
 /* The list's own header: the count, and the toggle that acts on all of it. */
 .browse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.browse-head .link-btn { flex: none; padding: 4px 0; min-height: 32px; font-size: .74rem; }
+.browse-head .link-btn { flex: none; padding: 4px 0; min-height: 44px; font-size: .74rem; }
 /* Under the list, not over it. Both of these are things you do once you have
    read something, and the list of cards you hid opens directly beneath them. */
 .browse-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 18px; }
@@ -1178,6 +1191,16 @@ button.plate:active { transform: translate(3px, 3px); box-shadow: none; }
   letter-spacing: .01em;
   border-bottom: 2px dotted var(--line); padding-bottom: 8px;
 }
+.bgroup-toggle {
+  flex: 1; min-width: 0; min-height: var(--tap); padding: 0;
+  display: flex; align-items: center; gap: 9px; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit;
+}
+.bgroup-toggle::after {
+  content: "+"; flex: none; margin-left: 2px; color: var(--accent);
+  font-size: 1.1rem; line-height: 1;
+}
+.bgroup-toggle[aria-expanded="true"]::after { content: "\2212"; }
 .bgroup-t { flex: 1; }
 .bgroup-art { width: 22px; height: 22px; flex: none; color: var(--accent); }
 /* The count is the way in, not a statistic: pressing it reads the whole theme.
@@ -1328,12 +1351,12 @@ mark {
 /* And the gutter is reserved on that line alone, so a title cannot run under
    Edit while everything the row opens keeps the full width. */
 #browse-list li:has(> .b-acts.bare) > details > summary,
-#browse-list li:has(> .b-acts.bare) > .browse-prompt { padding-right: 50px; }
+#browse-list li:has(> .b-acts.bare) > .browse-prompt { padding-right: 58px; }
 .b-mine { flex: 1 1 100%; font-size: .72rem; color: var(--muted); }
 /* The one line here that is a decision rather than a label. Warn, not the
    accent: the accent is what the app uses to point at things you asked for. */
 .b-moved { color: var(--warn); }
-.b-acts .link-btn { padding: 6px 2px; min-height: 40px; flex: none; }
+.b-acts .link-btn { padding: 6px 2px; min-width: 44px; min-height: 44px; flex: none; }
 /* Above the deck rather than under it, and set off from it: these are cards
    that are not in the deck, and reading on past them into the ones that are
    should not feel like one list. */

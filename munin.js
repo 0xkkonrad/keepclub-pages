@@ -1633,6 +1633,7 @@ async function renderShelf(asOverlay, say) {
   if (!asOverlay) {
     const main = el.querySelector('.shelf-inner');
     main.id = 'shelf-main';
+    main.setAttribute('role', 'main');
     main.tabIndex = -1;
     document.querySelector('.skip')?.setAttribute('href', '#shelf-main');
   }

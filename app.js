@@ -85,18 +85,36 @@ const LOOSE_SECTION = 'u.loose';
 // other JSON someone happens to pick.
 const EXPORT_APP = 'munin/' + COURSE.id;
 const EXPORT_FORMAT = 1;
-// A course may name the exam it was built for (course.json examDate); a fresh
-// install starts there rather than asking. It is changed in Settings, and
-// clearing it goes back to plain spacing. No date in the course → no default.
-const EXAM_DEFAULT = (typeof COURSE.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(COURSE.examDate)) ? COURSE.examDate : '';
-// Not every course is sat. `"exam": false` in course.json takes the ask, the
-// Settings row and the countdown off that course altogether; absent means yes,
-// so a course that says nothing keeps what it has always had.
-const EXAM_ON = COURSE.exam !== false;
 // A <input type="date"> fires `change` on every keystroke in the year segment,
 // so typing 2026 walks through 0002, 0020 and 0202 on its way. Anything outside
 // this window is someone mid-keystroke, not a date they mean.
 const EXAM_MIN_YEAR = 2020, EXAM_MAX_YEAR = 2040;
+
+/** A real local-calendar date inside the range the controls offer.
+ *
+ * Date.parse normalises impossible dates instead of refusing them: February 31
+ * becomes March 3. A restored or synced value like that is blank in a native
+ * date field while still changing the scheduler, which is the worst possible
+ * disagreement between a setting and what it does. Round-trip the parts so an
+ * impossible day can never enter scheduling. */
+function validExamDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year < EXAM_MIN_YEAR || year > EXAM_MAX_YEAR) return false;
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year
+    && date.getMonth() === month - 1
+    && date.getDate() === day;
+}
+
+// A course may name the exam it was built for (course.json examDate); a fresh
+// install starts there rather than asking. It is changed in Settings, and
+// clearing it goes back to plain spacing. No valid date in the course → no default.
+const EXAM_DEFAULT = validExamDate(COURSE.examDate) ? COURSE.examDate : '';
+// Not every course is sat. `"exam": false` in course.json takes the ask, the
+// Settings row and the countdown off that course altogether; absent means yes,
+// so a course that says nothing keeps what it has always had.
+const EXAM_ON = COURSE.exam !== false;
 // The text sizes offered, smallest first. Names rather than numbers: the pixels
 // belong to app.css (`:root[data-font=…]`), which is the only place that knows
 // what the type scale is measured in, and a number stored here would be a
@@ -255,6 +273,22 @@ function freshState() {
  * backup is the one place a string can reach these templates. */
 const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+/** Deterministic comparison for converged documents whose object insertion
+ * order came from different tabs. JSON text order is not data: comparing the
+ * raw strings here can make two semantically identical tabs rewrite forever. */
+function stableJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
+  if (isPlainObject(value)) return '{' + Object.keys(value).sort()
+    .filter((key) => value[key] !== undefined)
+    .map((key) => JSON.stringify(key) + ':' + stableJson(value[key])).join(',') + '}';
+  return JSON.stringify(value === undefined ? null : value);
+}
+/** Cut user-authored text without leaving half of a surrogate pair behind. */
+const cutCodePoints = (value, limit) => {
+  const text = String(value == null ? '' : value);
+  const points = [...text];
+  return points.length <= limit ? text : points.slice(0, limit).join('');
+};
 /** "1 day", not "1 days" — the app counts down to a date, so it hits 1 often. */
 const plural = (v, word) => `${n(v)} ${n(v) === 1 ? word : word + 's'}`;
 /** "a", "a and b", "a, b and c".
@@ -319,7 +353,7 @@ function sanitise(raw) {
   // interval on someone else's deck the moment they imported it.
   const rawExam = isPlainObject(raw.settings) ? raw.settings.examDate : undefined;
   if (typeof rawExam !== 'string') s.settings.examDate = '';
-  if (typeof s.settings.examDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.settings.examDate)) {
+  if (!validExamDate(s.settings.examDate)) {
     s.settings.examDate = '';
   }
 
@@ -394,9 +428,11 @@ function sanitise(raw) {
       // Tabs and newlines are text a person typed and are kept. The rest of the
       // C0 range is not: it survives JSON, it is invisible in the panel, and it
       // is the difference between what the list shows and what is stored.
-      const text = (typeof note.text === 'string' ? note.text : '')
-        .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
-        .slice(0, NOTE_LEN);
+      const text = cutCodePoints(
+        (typeof note.text === 'string' ? note.text : '')
+          .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ''),
+        NOTE_LEN,
+      );
       const at = Math.round(num(note.at, 0, 8.64e15, 0));
       // An edit stamp that is missing falls back to the written stamp rather
       // than to zero: zero would lose every merge against a device that has
@@ -494,17 +530,43 @@ function publishStateReset() {
   resetStamp = stamp;
   discardStateOnLeave = false;
 }
-function save() {
+function save(preserveIdleBranch = true) {
   clearTimeout(saveTimer);
   if (refuseForeignWrite()) return false;
-  saveTimer = setTimeout(writeNow, 250);
+  saveTimer = setTimeout(() => writeNow(preserveIdleBranch), 250);
   return true;
 }
 /* Settings sync as one block, last write wins, which needs a time they were
  * last written. Stamped here rather than in each handler: there are eight
  * places settings change, and the ninth would have been the one that forgot. */
 let settingsShape = null;
-function writeNow() {
+
+/** A readable review document from storage, or null.
+ *
+ * Kept separate from load(): a write may need the durable copy without
+ * replacing the tab's pending changes first. */
+function stateDocument(text) {
+  if (typeof text !== 'string' || !text) return null;
+  try { return sanitise(JSON.parse(text)); } catch (e) { return null; }
+}
+
+/** Merge idle-tab copies with the same convergent algebra device Sync uses.
+ *
+ * The study lease serialises grades, but idle tabs can both write notes,
+ * cards, or settings. localStorage operations are atomic one at a time, not as
+ * a read/change/write transaction, so re-reading before a write narrows the
+ * race and storage-event healing closes it: the event carries the overwritten
+ * branch even when the durable value has already moved again. */
+function mergeStateDocuments(...copies) {
+  if (!globalThis.DSSync || !DSSync.mergeState) return;
+  let merged = state;
+  for (const copy of copies) {
+    if (copy) merged = DSSync.mergeState(merged, copy);
+  }
+  state = sanitise(merged);
+}
+
+function writeNow(preserveIdleBranch = false) {
   clearTimeout(saveTimer);
   // A different tab may have explicitly replaced this deck and started over.
   // Its tombstone is persistent, so even a suspended tab that missed the
@@ -516,7 +578,17 @@ function writeNow() {
   if (refuseForeignWrite()) return false;
   const shape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
   if (settingsShape !== null && shape !== settingsShape) state.settings.at = Date.now();
-  settingsShape = shape;
+  // Ordinary debounced edits preserve a branch another idle tab completed
+  // before this setItem. Explicit replacement paths (restore, reset, eviction)
+  // pass false: merging the value they deliberately supersede would resurrect
+  // the records they just removed. Storage-event healing still closes a truly
+  // simultaneous ordinary-write race below.
+  if (preserveIdleBranch) {
+    let durableText = null;
+    try { durableText = localStorage.getItem(KEY); } catch (e) { /* setItem reports below */ }
+    mergeStateDocuments(stateDocument(durableText));
+  }
+  settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
   let wrote = false;
   try {
     const wasBlocked = saveBlocked;
@@ -620,7 +692,19 @@ addEventListener('storage', (e) => {
       toast('Another tab is changing the cards in this deck. Close one, or the deck will not add up.');
       return;
     }
-    loadCardLayer();
+    if (e.newValue === null) {
+      loadCardLayer();
+      applyCardLayer().then(renderDeckChanged).catch(console.error);
+      return;
+    }
+    const incoming = cardLayerDocument(e.newValue);
+    let durable = null;
+    try { durable = cardLayerDocument(localStorage.getItem(CARDS_KEY)); } catch (err) { /* use event */ }
+    if (incoming.ok) cardLayer = mergedCards(cardLayer, incoming.cards);
+    if (durable && durable.ok) cardLayer = mergedCards(cardLayer, durable.cards);
+    capWrittenBlocks();
+    const durableCards = durable && durable.ok ? durable.cards : {};
+    if (stableJson(cardLayer) !== stableJson(durableCards)) writeCardLayer();
     applyCardLayer().then(renderDeckChanged).catch(console.error);
     return;
   }
@@ -631,7 +715,10 @@ addEventListener('storage', (e) => {
     toast('Another tab is studying this deck. Close one, or your progress will not add up.');
     return;
   }
-  state = sanitise(incoming);
+  let durableText = null;
+  try { durableText = localStorage.getItem(KEY); } catch (err) { /* the event is still readable */ }
+  const durable = stateDocument(durableText);
+  mergeStateDocuments(sanitise(incoming), durable);
   sweepUnknownRecords();
   // This was another tab's write, not a fresh local settings decision.
   settingsShape = JSON.stringify(Object.assign({}, state.settings, { at: 0 }));
@@ -641,6 +728,10 @@ addEventListener('storage', (e) => {
   if (current === 'stats') renderStats();
   if (current === 'browse') renderBrowse();
   renderNotesIfOpen();
+  renderSetupIfOpen();
+  // If this event is the branch another tab overwrote, put the union back. An
+  // identical document is left alone so converged tabs do not echo forever.
+  if (!durable || stableJson(state) !== stableJson(durable)) writeNow();
 });
 
 /* ─────────────────────────── dates ─────────────────────────── */
@@ -739,9 +830,9 @@ function daysToExam() {
   // synced settings block happens to carry in this field.
   if (!EXAM_ON) return null;
   const d = state.settings.examDate;
-  if (!d) return null;
-  const t = Date.parse(d + 'T00:00:00');
-  if (Number.isNaN(t)) return null;
+  if (!validExamDate(d)) return null;
+  const [year, month, day] = d.split('-').map(Number);
+  const t = new Date(year, month - 1, day).getTime();
   return Math.round((startOfDay(t) - startOfDay(Date.now())) / DAY);
 }
 
@@ -1125,6 +1216,27 @@ function backImage(card) {
     ? card.media.find((item) => item && item.side === 'back'
       && item.mediaType === 'image' && typeof item.source === 'string')
     : null;
+}
+
+/** Images this course can fetch into its course cache deliberately.
+ *
+ * Legacy courses have one established back-side diagram. Format 2 can attach
+ * several descriptive images to either side, and all of them are part of the
+ * offline promise shown in Settings. */
+function offlineImages() {
+  const items = [];
+  for (const card of DECK.cards) {
+    if (RUNTIME_SOURCE_FORMAT === 'course-v2') {
+      for (const side of ['front', 'back']) {
+        items.push(...mediaForSide(card, side).filter((item) =>
+          item && item.mediaType === 'image' && typeof item.source === 'string'));
+      }
+    } else {
+      const image = backImage(card);
+      if (image) items.push(image);
+    }
+  }
+  return items;
 }
 
 /** Whether this card has a second side to reveal.
@@ -2302,6 +2414,20 @@ function noteSays(line) {
   if (el) el.textContent = line || '';
 }
 
+function clearNoteInvalid() {
+  const box = $('#notes-text');
+  box.removeAttribute('aria-invalid');
+  box.removeAttribute('aria-describedby');
+}
+
+function noteInvalid(line) {
+  const box = $('#notes-text');
+  noteSays(line);
+  box.setAttribute('aria-invalid', 'true');
+  box.setAttribute('aria-describedby', 'notes-say');
+  box.focus({ preventScroll: true });
+}
+
 /* Every note write goes through here.
  *
  * The review document is one JSON value, so a note is written under the same
@@ -2312,6 +2438,7 @@ function noteSays(line) {
  * again, rather than sitting there looking saved. */
 function commitNotes(say) {
   const wrote = save();
+  if (wrote) clearNoteInvalid();
   renderNotes();
   renderNotesRow();
   // The toast for a refused write ranks below this panel, so the panel says it
@@ -2322,15 +2449,18 @@ function commitNotes(say) {
 
 /** Whatever a person typed, as far as it is a note at all. */
 function noteTextFrom(input) {
-  return String(input == null ? '' : input)
+  const text = String(input == null ? '' : input)
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
-    .trim()
-    .slice(0, NOTE_LEN);
+    .trim();
+  return cutCodePoints(text, NOTE_LEN);
 }
 
 function addNote(input) {
   const text = noteTextFrom(input);
-  if (!text) return false;
+  if (!text) {
+    noteInvalid('A note needs some words.');
+    return false;
+  }
   if (liveWrittenCount() >= WRITTEN_LIVE) {
     noteSays(`This deck already holds ${WRITTEN_LIVE} notes and cards of your own. `
       + 'Delete one to write another.');
@@ -2349,7 +2479,7 @@ function editNote(id, input) {
   // in storage (see sync.js), so an empty edit is offered as a delete rather
   // than quietly performing one.
   if (!text) {
-    noteSays('A note needs some words. Use Delete to take it away.');
+    noteInvalid('A note needs some words. Use Delete to take it away.');
     return false;
   }
   if (text === note.text) return true;
@@ -2435,6 +2565,7 @@ function startNoteEdit(id) {
 function cancelNoteEdit() {
   noteEditing = null;
   $('#notes-text').value = '';
+  clearNoteInvalid();
   renderNotes();
   noteSays('');
 }
@@ -2447,6 +2578,7 @@ function openNotes(opener) {
   notesOpener = opener || null;
   noteEditing = null;
   $('#notes-text').value = '';
+  clearNoteInvalid();
   noteSays('');
   renderNotes();
   panel.hidden = false;
@@ -2467,6 +2599,7 @@ function closeNotes(fromHistory) {
   setBackgroundInert(false);
   noteEditing = null;
   $('#notes-text').value = '';
+  clearNoteInvalid();
   if (notesOpener && notesOpener.isConnected && notesOpener.focus) {
     notesOpener.focus({ preventScroll: true });
   }
@@ -2564,8 +2697,7 @@ function cardTextFrom(input) {
   const text = String(input == null ? '' : input)
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
     .trim();
-  const points = [...text];
-  return points.length <= CARD_LEN ? text : points.slice(0, CARD_LEN).join('');
+  return cutCodePoints(text, CARD_LEN);
 }
 
 /** A record this layer holds for a card, or null. Object.hasOwn, because an id
@@ -2732,24 +2864,33 @@ function sanitiseCardLayer(block) {
  * document that would not open would take every written card's history with it,
  * silently, on the boot after the failure. No document at all IS an answer;
  * a document that will not parse, or whose block is not a block, is not. */
-function loadCardLayer() {
+function cardLayerDocument(text) {
   let raw;
   try {
-    const text = localStorage.getItem(CARDS_KEY);
     raw = text === null ? {} : JSON.parse(text);
   } catch (e) {
-    console.warn('cards unreadable, leaving them out of this boot', e);
-    cardLayer = {};
-    cardLayerLoaded = false;
-    return false;
+    return { ok: false, cards: {} };
   }
   if (!isPlainObject(raw) || (raw.cards !== undefined && !isPlainObject(raw.cards))) {
-    console.warn('cards document is not a cards document, leaving it alone');
+    return { ok: false, cards: {} };
+  }
+  return { ok: true, cards: sanitiseCardLayer(raw.cards) };
+}
+
+function loadCardLayer() {
+  let parsed;
+  try {
+    parsed = cardLayerDocument(localStorage.getItem(CARDS_KEY));
+  } catch (e) {
+    parsed = { ok: false, cards: {} };
+  }
+  if (!parsed.ok) {
+    console.warn('cards unreadable, leaving them out of this boot');
     cardLayer = {};
     cardLayerLoaded = false;
     return false;
   }
-  cardLayer = sanitiseCardLayer(raw.cards);
+  cardLayer = parsed.cards;
   cardLayerLoaded = true;
   return true;
 }
@@ -2763,12 +2904,20 @@ function loadCardLayer() {
  * put that tab's durable review document back by the time this returns; re-
  * reading the layer here is the other half of the same move, so what the screen
  * redraws is what is actually on the device. */
-function writeCardLayer() {
+function writeCardLayer(preserveIdleBranch = false) {
   if (refuseForeignWrite()) {
     loadCardLayer();
     return { ok: false, say: 'Another tab is studying this deck. Finish there before changing cards.' };
   }
   try {
+    // commitCards() opts into the idle-tab union. Import, restore and eviction
+    // writes do not: those deliberately replace or remove records, and merging
+    // the old durable layer would bring them straight back.
+    if (preserveIdleBranch) {
+      const durable = cardLayerDocument(localStorage.getItem(CARDS_KEY));
+      if (durable.ok) cardLayer = mergedCards(durable.cards, cardLayer);
+      capWrittenBlocks();
+    }
     localStorage.setItem(CARDS_KEY, JSON.stringify({ v: 1, cards: cardLayer }));
   } catch (e) {
     // Put the document that is actually on the device back in front of the
@@ -2989,7 +3138,7 @@ function sectionForInput(input) {
  * cards follow you between devices" says. The dock's Fix this card was covered
  * only by accident, because leaving a session writes review history. */
 async function commitCards(id, say) {
-  const wrote = writeCardLayer();
+  const wrote = writeCardLayer(true);
   await applyCardLayer();
   renderDeckChanged();
   // Never mid-session, for the reason writeNow() gives: adopting a merge would
@@ -3638,6 +3787,13 @@ function cardSays(line) {
   if (el) el.textContent = line || '';
 }
 
+function clearCardInvalid() {
+  for (const field of [$('#card-front'), $('#card-back')]) {
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+}
+
 /** Which of the two boxes a diagnostic is about. */
 function cardDiagnosticSide(item) {
   return /\.back\b/.test(String((item && item.path) || '')) ? 'Answer' : 'Question';
@@ -3645,6 +3801,19 @@ function cardDiagnosticSide(item) {
 
 const cardErrors = (list) => (Array.isArray(list) ? list : [])
   .filter((item) => item && item.severity === 'error');
+
+function markCardInvalid(result) {
+  const sides = new Set(cardErrors(result && result.diagnostics).map(cardDiagnosticSide));
+  if (!sides.size) sides.add('Question');
+  const fields = [];
+  if (sides.has('Question')) fields.push($('#card-front'));
+  if (sides.has('Answer')) fields.push($('#card-back'));
+  for (const field of fields) {
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', 'card-say');
+  }
+  if (fields[0]) fields[0].focus({ preventScroll: true });
+}
 
 /** The status line, in the parser's own message and correction — with the box
  *  named, which is the one thing the parser cannot know to say. */
@@ -3809,6 +3978,7 @@ function openCardSheet(opts) {
   }
   $('#card-front').value = front;
   $('#card-back').value = back;
+  clearCardInvalid();
   $('#card-section').value = '';
   cardSays('');
   cardDiagnostics([]);
@@ -3833,6 +4003,7 @@ function closeCardSheet(fromHistory) {
   cardSheet = null;
   $('#card-front').value = '';
   $('#card-back').value = '';
+  clearCardInvalid();
   cardSays('');
   cardDiagnostics([]);
   // The control that opened this is often a button on a row the save has just
@@ -3849,17 +4020,20 @@ function closeCardSheet(fromHistory) {
  * A new card leaves the sheet open with the boxes cleared, the way the notes
  * panel does: writing one card is usually writing three. An edit closes,
  * because you came here to fix the card you were looking at. */
+let cardSaving = false;
 async function saveCardSheet() {
   if (!cardSheet) return { ok: false };
   const button = $('#card-save');
-  if (button.disabled) return { ok: false };
+  if (button.disabled || cardSaving) return { ok: false };
   const input = {
     front: $('#card-front').value,
     back: $('#card-back').value,
     section: $('#card-where').hidden ? '' : $('#card-section').value,
   };
   const editing = cardSheet.cardId;
-  button.disabled = true;
+  cardSaving = true;
+  button.setAttribute('aria-disabled', 'true');
+  clearCardInvalid();
   let result;
   try {
     result = editing ? await editCard(editing, input) : await writeCard(input);
@@ -3869,13 +4043,21 @@ async function saveCardSheet() {
   }
   // The sheet may have been closed while the reader was working, which is one
   // dynamic import and a parse away from instant on a cold cache.
+  cardSaving = false;
+  button.removeAttribute('aria-disabled');
   if (!cardSheet) return result;
-  button.disabled = false;
   cardDiagnostics(result.diagnostics);
   cardSays(cardSayFor(result));
-  if (!result.ok) return result;
+  if (!result.ok) {
+    markCardInvalid(result);
+    return result;
+  }
   if (editing) {
     closeCardSheet(false);
+    // Returning to the edit button made the advertised Space/Enter study
+    // shortcut immediately activate that button and reopen this sheet. After a
+    // successful in-session edit, return to the card content instead.
+    if (current === 'study') $('#card-scroll').focus({ preventScroll: true });
     toast(result.say);
     return result;
   }
@@ -4922,16 +5104,20 @@ function renderBrowseIndex() {
     const sec = document.createElement('section');
     sec.className = 'bgroup';
     const named = !!g.title;
-    sec.innerHTML = (named ? `<details class="part"${first ? ' open' : ''}>
-      <summary class="bgroup-h">
-        ${doodle(GROUP_ART[g.groupId] || COURSE.fallback, 'bgroup-art')}
-        <span class="bgroup-t">${escapeHtml(g.title)}</span>
+    const open = first;
+    const listId = `browse-group-${g.groupId}`;
+    sec.innerHTML = (named ? `<div class="bgroup-h">
+        <button class="bgroup-toggle" type="button" aria-expanded="${open}"
+          aria-controls="${escapeHtml(listId)}">
+          ${doodle(GROUP_ART[g.groupId] || COURSE.fallback, 'bgroup-art')}
+          <span class="bgroup-t">${escapeHtml(g.title)}</span>
+        </button>
         <button class="bgroup-all" data-scope="${escapeHtml(GROUP_AT + g.groupId)}"
           aria-label="Read all ${plural(g.cardCount, 'card')} in ${escAttr(g.title)}">${
   plural(g.cardCount, 'card')} →</button>
-      </summary>
-      <ul class="btiles"></ul>
-    </details>` : '<ul class="btiles"></ul>');
+      </div>
+      <ul class="btiles" id="${escapeHtml(listId)}"${open ? '' : ' hidden'}></ul>`
+      : '<ul class="btiles"></ul>');
     if (named) first = false;
     const ul = sec.querySelector('.btiles');
     for (const sectionId of g.sectionIds) {
@@ -4965,7 +5151,9 @@ function renderBrowse() {
   // The section count is in the shape too: hiding the last card in a section
   // takes the section, and an option for a section that is not there any more
   // filters to an empty list with nothing on screen to explain it.
-  const shape = `${lc}/${wantLeech}/${DECK.sections.length}`;
+  const groupCounts = [...groupOf.values()]
+    .map((group) => `${group.groupId}:${n(group.cardCount)}`).join(',');
+  const shape = `${lc}/${wantLeech}/${DECK.sections.length}/${groupCounts}`;
   // Rebuilt only when that changes, so the open dropdown does not reset itself
   // while you are choosing from it.
   if (sel.dataset.leeches !== shape) {
@@ -6256,9 +6444,7 @@ function toast(msg, sticky = false) {
 
 /** Is this a date a person could have meant, or a year still being typed? */
 function plausibleExam(v) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
-  const y = Number(v.slice(0, 4));
-  return y >= EXAM_MIN_YEAR && y <= EXAM_MAX_YEAR;
+  return validExamDate(v);
 }
 
 /* The same window, told to the native picker, so its own arrows and its
@@ -6425,6 +6611,10 @@ function wire() {
     renderNotes();
     box.focus({ preventScroll: true });
   });
+  $('#notes-text').addEventListener('input', () => {
+    clearNoteInvalid();
+    noteSays('');
+  });
   $('#notes-cancel').addEventListener('click', cancelNoteEdit);
   // Delegated: the list is re-drawn on every change, and per-row listeners
   // would be re-attached each time to elements that are already gone.
@@ -6462,6 +6652,17 @@ function wire() {
     e.preventDefault();
     saveCardSheet().catch(console.error);
   });
+  for (const field of [$('#card-front'), $('#card-back')]) {
+    field.addEventListener('input', () => {
+      field.removeAttribute('aria-invalid');
+      field.removeAttribute('aria-describedby');
+      if (!$('#card-front').hasAttribute('aria-invalid')
+          && !$('#card-back').hasAttribute('aria-invalid')) {
+        cardSays('');
+        cardDiagnostics([]);
+      }
+    });
+  }
   // Delegated: this row is rebuilt whenever the sheet re-renders, and per-button
   // listeners would be re-attached each time to elements that are already gone.
   $('#card-more').addEventListener('click', (e) => {
@@ -6473,7 +6674,12 @@ function wire() {
     if (e.target.closest('[data-card-revert]')) revertCardFrom(cardSheet.cardId).catch(console.error);
   });
   $('#browse-write').addEventListener('click', (e) => {
-    openCardSheet({ opener: e.currentTarget, section: $('#sect-filter').value });
+    const scope = $('#sect-filter').value;
+    const group = isGroup(scope) ? groupOf.get(scope.slice(GROUP_AT.length)) : null;
+    openCardSheet({
+      opener: e.currentTarget,
+      section: group && group.sectionIds.length ? group.sectionIds[0] : scope,
+    });
   });
   $('#browse-hidden').addEventListener('click', () => {
     showingHidden = !showingHidden;
@@ -6591,6 +6797,15 @@ function wire() {
   // One listener for twenty-four tiles and seven headings. Delegated because the
   // index is rebuilt wholesale, and a listener per button would have to be too.
   $('#browse-index').addEventListener('click', (e) => {
+    const toggle = e.target.closest('.bgroup-toggle');
+    if (toggle) {
+      const list = document.getElementById(toggle.getAttribute('aria-controls'));
+      if (!list) return;
+      const open = list.hidden;
+      list.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
     const b = e.target.closest('[data-scope]');
     if (!b) return;
     // The theme's own "N cards →" sits inside the summary, so pressing it would
@@ -6646,12 +6861,12 @@ function wire() {
   $('#set-new').addEventListener('change', (e) => {
     state.settings.newPerDay = clamp(parseInt(e.target.value, 10) || 0, 0, 200);
     e.target.value = state.settings.newPerDay;
-    save();
+    if (save() && current === 'home') renderHome();
   });
   $('#set-max').addEventListener('change', (e) => {
     state.settings.maxRev = clamp(parseInt(e.target.value, 10) || 10, 10, 999);
     e.target.value = state.settings.maxRev;
-    save();
+    if (save() && current === 'home') renderHome();
   });
   $('#set-shuffle').addEventListener('change', (e) => {
     state.settings.shuffle = e.target.checked;
@@ -7173,8 +7388,7 @@ function wire() {
       toast('Offline storage is still starting up — try again in a moment.');
       return;
     }
-    const urls = Array.from(new Set(DECK.cards
-      .map(backImage).filter(Boolean).map(courseMediaUrl)));
+    const urls = Array.from(new Set(offlineImages().map(courseMediaUrl)));
     btn.disabled = true;
     btn.textContent = `Saving 0 of ${urls.length}…`;
     prefetchRequest = (crypto.randomUUID && crypto.randomUUID())
@@ -7384,7 +7598,7 @@ function workerReg() {
 function renderOffline() {
   const card = $('#offline-card');
   if (!card) return;
-  const shots = new Set(DECK.cards.map(backImage).filter(Boolean).map((item) => item.source));
+  const shots = new Set(offlineImages().map((item) => item.source));
   if (!shots.size) {
     // An imported deck keeps its pictures in the database with its cards;
     // there is nothing to fetch and nothing to say.
@@ -7527,7 +7741,10 @@ async function boot() {
   const capped = capWrittenBlocks();
   if (capped || cardsDropped || notesDropped) {
     writeCardLayer();
-    save();
+    // This is an eviction, not an ordinary idle-tab edit. Re-merging the
+    // durable pre-eviction document would immediately resurrect what the
+    // shared ceiling just removed.
+    save(false);
   }
   await applyCardLayer();
 
@@ -7540,7 +7757,7 @@ async function boot() {
   // ever in memory says the same sentence again on every boot.
   const swept = sweepDeletedCardHistory();
   if (swept) historyDropped += swept;
-  if (swept || (sweptUnknown && historyEvicted)) save();
+  if (swept || (sweptUnknown && historyEvicted)) save(false);
 
   // A cards document that would not open is not an empty one, and the sweeps
   // above know that. What nothing did was say it: every card somebody had

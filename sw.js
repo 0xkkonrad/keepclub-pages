@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: 'fef58a42e4', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': 'd068d09220', 'git-101': '9e570c7079' } };
+const BUILD = { shell: '6e082dc5f1', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': 'd068d09220', 'git-101': '9e570c7079' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -62,9 +62,21 @@ function typeFor(pathname) {
   if (pathname.endsWith('.js')) return 'application/javascript';
   if (pathname.endsWith('.css')) return 'text/css';
   if (pathname.endsWith('.json') || pathname.endsWith('.webmanifest')) return 'application/json';
-  if (pathname.endsWith('.png')) return 'image/png';
+  const image = imageTypeFor(pathname);
+  if (image) return image;
   if (pathname.endsWith('.woff2')) return 'font/woff2';
   return 'text/html';
+}
+
+/** Every raster/vector image the public course contract admits. */
+function imageTypeFor(pathname) {
+  const path = String(pathname || '').toLowerCase();
+  if (path.endsWith('.png')) return 'image/png';
+  if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg';
+  if (path.endsWith('.webp')) return 'image/webp';
+  if (path.endsWith('.gif')) return 'image/gif';
+  if (path.endsWith('.svg')) return 'image/svg+xml';
+  return null;
 }
 
 function ok(r, expected) {
@@ -298,14 +310,16 @@ self.addEventListener('message', (e) => {
           if (!id || !url.pathname.includes('/courses/' + id + '/img/')) {
             throw new Error('not a course image');
           }
+          const expected = imageTypeFor(url.pathname);
+          if (!expected) throw new Error('unsupported course image');
           // A course's diagrams belong in that course's cache, so pulling one
           // course down for a flight does not push another one out.
           const cache = await caches.open(cacheFor(url.pathname));
           const existing = await cache.match(url.href);
-          if (existing && !ok(existing, 'image/png')) await cache.delete(url.href);
-          if (!existing || !ok(existing, 'image/png')) {
+          if (existing && !ok(existing, expected)) await cache.delete(url.href);
+          if (!existing || !ok(existing, expected)) {
             const response = await fetch(url.href, { cache: 'reload' });
-            if (!ok(response, 'image/png')) throw new Error('not a valid image response');
+            if (!ok(response, expected)) throw new Error('not a valid image response');
             await cache.put(url.href, response.clone());
           }
         } catch (err) {
@@ -535,7 +549,10 @@ self.addEventListener('fetch', (e) => {
   // Diagrams: cache first, they never change without a new cache version.
   e.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((r) => {
-      if (ok(r, 'image/png')) caches.open(cacheFor(url.pathname)).then((c) => c.put(req, r.clone()));
+      const expected = imageTypeFor(url.pathname);
+      if (expected && ok(r, expected)) {
+        caches.open(cacheFor(url.pathname)).then((c) => c.put(req, r.clone()));
+      }
       return r;
     }))
   );
