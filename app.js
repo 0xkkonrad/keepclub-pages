@@ -1598,6 +1598,14 @@ async function shareMoment(moment, button, status) {
   }
 }
 
+/* Same retrigger trick as showNextUnlock(): remove, force a reflow, add back,
+ * so tapping the same earned row twice in a row plays the bounce both times. */
+function celebrateRow(row) {
+  row.classList.remove('pop');
+  void row.offsetWidth;
+  row.classList.add('pop');
+}
+
 function renderAch() {
   const h = $('#hoard-title');
   if (h) h.textContent = HOARD_TITLE;
@@ -1641,17 +1649,29 @@ function renderAch() {
   const staticRows = ACHIEVEMENTS.map((a) => {
     const on = unlocked[a.id];
     const when = on ? ` · ${longDate(dayKey(on))}` : '';
-    return `<li class="${on ? '' : `locked${nextUp.has(a.id) ? ' next' : ''}`}">${doodle(a.art)}
-      <span class="a-txt"><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.description)}${escapeHtml(when)}</small></span>
-      ${on && a.shareable
+    const body = `${doodle(a.art)}
+      <span class="a-txt"><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.description)}${escapeHtml(when)}</small></span>`;
+    if (!on) return `<li class="locked${nextUp.has(a.id) ? ' next' : ''}">${body}</li>`;
+    // Tapping anywhere on an earned row does what its Share button does; a
+    // private one (the time-of-day Easter eggs) has nothing to share, so its
+    // tap reads the unlock date back instead — still a response, not a dead area.
+    const tapLabel = a.shareable ? `Share ${a.title}` : `${a.title}, earned${when}`;
+    return `<li class="earned">
+      <button class="ach-tap" type="button"
+        ${a.shareable ? `data-ach-share="${escapeHtml(a.id)}"` : `data-ach-note="${escapeHtml(a.id)}"`}
+        aria-label="${escapeHtml(tapLabel)}">${body}</button>
+      ${a.shareable
         ? `<button class="share-mini" data-share-ach="${escapeHtml(a.id)}" aria-label="Share ${escapeHtml(a.title)}">Share</button>`
         : ''}</li>`;
   }).join('');
   const repeatableRows = [...progressMoments.values()].map((moment) => `
-    <li class="repeatable">${doodle(moment.art)}
-      <span class="a-txt"><b>${escapeHtml(moment.title)}</b>
-        <small>${escapeHtml(moment.description)} · ${moment.family === 'personal-best'
-          ? 'current best' : 'currently solid'}</small></span>
+    <li class="earned repeatable">
+      <button class="ach-tap" type="button" data-ach-share-moment="${escapeHtml(moment.id)}"
+        aria-label="Share ${escapeHtml(moment.title)}">${doodle(moment.art)}
+        <span class="a-txt"><b>${escapeHtml(moment.title)}</b>
+          <small>${escapeHtml(moment.description)} · ${moment.family === 'personal-best'
+            ? 'current best' : 'currently solid'}</small></span>
+      </button>
       <button class="share-mini" data-share-moment="${escapeHtml(moment.id)}"
         aria-label="Share ${escapeHtml(moment.title)}">Share</button>
     </li>`).join('');
@@ -6542,15 +6562,29 @@ function wire() {
   $('#month-share').addEventListener('click', (e) =>
     shareMoment(monthlyMoment, e.currentTarget, $('#month-share-status')));
   $('#ach-list').addEventListener('click', (e) => {
-    const repeatable = e.target.closest('[data-share-moment]');
+    const row = e.target.closest('#ach-list > li.earned');
+    if (row) celebrateRow(row);
+    // The Share button and the card's own tap area name the same target
+    // through two attributes (data-share-ach / data-ach-share), never one
+    // shared attribute on both — a test (and any other exact-selector code)
+    // that reaches for "the achievement's share control" must find one match.
+    const repeatable = e.target.closest('[data-share-moment], [data-ach-share-moment]');
     if (repeatable) {
-      shareMoment(progressMoments.get(repeatable.dataset.shareMoment), repeatable);
+      const momentId = repeatable.dataset.shareMoment || repeatable.dataset.achShareMoment;
+      shareMoment(progressMoments.get(momentId), repeatable);
       return;
     }
-    const button = e.target.closest('[data-share-ach]');
+    const note = e.target.closest('[data-ach-note]');
+    if (note) {
+      const at = visibleUnlocks()[note.dataset.achNote];
+      const a = ACHIEVEMENTS.find((item) => item.id === note.dataset.achNote);
+      if (a && at) toast(`${a.title} · earned ${longDate(dayKey(at))}`);
+      return;
+    }
+    const button = e.target.closest('[data-share-ach], [data-ach-share]');
     if (!button) return;
     const unlocked = visibleUnlocks();
-    const id = button.dataset.shareAch;
+    const id = button.dataset.shareAch || button.dataset.achShare;
     const moment = AchievementEngine.record({
       id,
       at: unlocked[id],

@@ -1496,6 +1496,32 @@ mark {
 /* Locked ones stay drawn rather than blanked out — a row of question marks
    tells you nothing about what is worth doing next. */
 .ach li.locked { box-shadow: none; border-style: dashed; opacity: .55; background: none; }
+/* Earned rows read as paper too, just warmer — the same accent tint the
+   moment cards above use — so a glance across the log already tells earned
+   from waiting without reading a word. */
+.ach li.earned {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+/* :has() rather than a hover rule on the button itself: the whole card should
+   lift, not just the tappable text inside it. Touch input never matches
+   :hover, so this is a pointer-only cue and never fights the tap bounce below. */
+.ach li.earned:has(.ach-tap:hover) { box-shadow: var(--sh); transform: translateY(-2px); }
+.ach-tap {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0;
+  background: none; border: 0; margin: 0; padding: 0;
+  font: inherit; text-align: left; border-radius: var(--r-sm);
+}
+/* celebrateRow() removes this class, forces a reflow, then adds it back, so
+ * the same row can bounce again on a second tap. No fill-mode: once the .38s
+ * is over, the hover/press rules above are back in charge of transform. */
+@keyframes achPop {
+  0% { transform: scale(1) rotate(0); }
+  40% { transform: scale(1.05) rotate(-1.5deg); }
+  75% { transform: scale(.99) rotate(.8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.ach li.pop { animation: achPop .38s cubic-bezier(.2, 1.3, .5, 1); }
 /* The rungs you are not on next. display:none rather than visibility: they are
    still in the list, because the sentence above it counts them and a share
    button on an earned row is never folded away — but containTab() decides what
