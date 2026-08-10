@@ -1544,6 +1544,15 @@ mark {
    here gets its own rules. */
 .ach-sheet-card { text-align: center; }
 .ach-sheet-card .sheet-bar { text-align: left; }
+/* vh is a phone's largest possible viewport, not necessarily today's: a
+   browser chrome that grows back after a scroll shrinks what is actually on
+   screen without shrinking vh, so .sheet-card's plain-vh cap can bottom-anchor
+   a card whose own title bar opens above the visible area. dvh tracks the
+   real one. #ach-sheet, not .ach-sheet-card, so this outranks .sheet-card's
+   92vh (same 0,1,0 specificity, earlier in the file) regardless of source
+   order; where the unit is unknown the whole declaration is dropped and that
+   92vh still holds, so this never leaves no cap at all. */
+#ach-sheet .sheet-card { max-height: 92dvh; }
 .ach-sheet-kind {
   margin: 0; color: var(--accent); font-size: .68rem; font-weight: 500;
   letter-spacing: .08em; text-transform: uppercase;
