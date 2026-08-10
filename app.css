@@ -1541,8 +1541,22 @@ mark {
 
 /* Same furniture as the card editor and settings (.sheet/.sheet-card/
    .sheet-bar) — this is the fourth thing that uses it, so only what is new
-   here gets its own rules. */
-.ach-sheet-card { text-align: center; }
+   here gets its own rules. Centred rather than bottom-anchored, unlike the
+   other three: a bottom sheet's card is pinned to the CSS viewport, and on a
+   phone whose browser chrome grows or shrinks with scroll position, that is
+   not always the viewport actually on screen — a tall sheet could open with
+   its own title bar and ✕ above the visible area. A smaller card with room on
+   every side stays inside whatever is actually visible, wherever the page
+   this opened over was scrolled to. */
+#ach-sheet { align-items: center; padding: 24px 16px; }
+.ach-sheet-card {
+  width: min(400px, 100%);
+  max-height: 80vh;
+  max-height: 80dvh; /* dvh tracks the browser chrome; ignored where unknown, leaving 80vh. */
+  border-radius: var(--r);
+  border-bottom: var(--bw) solid var(--stroke);
+  text-align: center;
+}
 .ach-sheet-card .sheet-bar { text-align: left; }
 .ach-sheet-kind {
   margin: 0; color: var(--accent); font-size: .68rem; font-weight: 500;
