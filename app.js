@@ -161,8 +161,11 @@ function doodlePath(name) {
 
 function doodle(name, cls, style) {
   const d = doodlePath(name);
+  // pathLength="1" costs nothing where nothing reads it, and it is what lets
+  // the achievement sheet's .redraw class draw any doodle with one CSS rule —
+  // the same trick the boot raven and a card's own figure already use.
   return `<span class="dood ${cls || ''}"${style ? ` style="${style}"` : ''} aria-hidden="true">`
-    + `<svg class="doodle" viewBox="0 0 32 32"><path d="${d}"/></svg></span>`;
+    + `<svg class="doodle" viewBox="0 0 32 32"><path pathLength="1" d="${d}"/></svg></span>`;
 }
 
 let DECK = null;                 // normalized runtime course
@@ -1536,19 +1539,29 @@ function shareStat(moment) {
   }
 }
 
+/* What a family is called out loud. Shared between the share card's eyebrow
+ * and the achievement sheet's, so the same family never has two names. */
+const FAMILY_LABEL = Object.freeze({
+  activity: 'club activity',
+  'club-streak': 'club streak',
+  'memories-kept': 'memories kept',
+  'personal-best': 'personal best',
+  'club-life': 'club life',
+  exploration: 'exploration',
+  mastery: 'course milestone',
+  recovery: 'recovery',
+  'anki-keeper': 'imported reviews',
+  comeback: 'comeback',
+  'monthly-recap': 'monthly recap',
+  membership: 'club membership',
+});
+
 function shareModel(moment) {
   const stat = shareStat(moment);
   const imported = /^local-[a-z0-9]+$/.test(COURSE.id);
   const artName = str(moment.art, 'tower');
   return {
-    label: ({
-      'club-streak': 'club streak',
-      'memories-kept': 'memories kept',
-      'monthly-recap': 'monthly recap',
-      'personal-best': 'personal best',
-      mastery: 'course milestone',
-      membership: 'club membership',
-    })[moment.family] || 'member achievement',
+    label: FAMILY_LABEL[moment.family] || 'member achievement',
     title: moment.title,
     body: moment.description,
     stat: stat.stat,
@@ -1652,29 +1665,18 @@ function renderAch() {
     const body = `${doodle(a.art)}
       <span class="a-txt"><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.description)}${escapeHtml(when)}</small></span>`;
     if (!on) return `<li class="locked${nextUp.has(a.id) ? ' next' : ''}">${body}</li>`;
-    // Tapping anywhere on an earned row does what its Share button does; a
-    // private one (the time-of-day Easter eggs) has nothing to share, so its
-    // tap reads the unlock date back instead — still a response, not a dead area.
-    const tapLabel = a.shareable ? `Share ${a.title}` : `${a.title}, earned${when}`;
-    return `<li class="earned">
-      <button class="ach-tap" type="button"
-        ${a.shareable ? `data-ach-share="${escapeHtml(a.id)}"` : `data-ach-note="${escapeHtml(a.id)}"`}
-        aria-label="${escapeHtml(tapLabel)}">${body}</button>
-      ${a.shareable
-        ? `<button class="share-mini" data-share-ach="${escapeHtml(a.id)}" aria-label="Share ${escapeHtml(a.title)}">Share</button>`
-        : ''}</li>`;
+    // One tap target, whatever the achievement is worth: it opens the sheet,
+    // which decides for itself whether there is a Share button to offer.
+    return `<li class="earned"><button class="ach-tap" type="button" data-ach-id="${escapeHtml(a.id)}"
+      aria-label="${escapeHtml(a.title)}, earned${escapeHtml(when)}">${body}</button></li>`;
   }).join('');
   const repeatableRows = [...progressMoments.values()].map((moment) => `
-    <li class="earned repeatable">
-      <button class="ach-tap" type="button" data-ach-share-moment="${escapeHtml(moment.id)}"
-        aria-label="Share ${escapeHtml(moment.title)}">${doodle(moment.art)}
-        <span class="a-txt"><b>${escapeHtml(moment.title)}</b>
-          <small>${escapeHtml(moment.description)} · ${moment.family === 'personal-best'
-            ? 'current best' : 'currently solid'}</small></span>
-      </button>
-      <button class="share-mini" data-share-moment="${escapeHtml(moment.id)}"
-        aria-label="Share ${escapeHtml(moment.title)}">Share</button>
-    </li>`).join('');
+    <li class="earned repeatable"><button class="ach-tap" type="button"
+      data-moment-id="${escapeHtml(moment.id)}" aria-label="${escapeHtml(moment.title)}">${doodle(moment.art)}
+      <span class="a-txt"><b>${escapeHtml(moment.title)}</b>
+        <small>${escapeHtml(moment.description)} · ${moment.family === 'personal-best'
+          ? 'current best' : 'currently solid'}</small></span>
+    </button></li>`).join('');
   const list = $('#ach-list');
   list.innerHTML = staticRows + repeatableRows;
   // Folded only where there is a wall to fold. A log with a handful of rungs
@@ -1684,6 +1686,75 @@ function renderAch() {
   const more = $('#ach-more');
   more.hidden = !folded;
   more.textContent = `Show all ${ACHIEVEMENTS.length}`;
+}
+
+let achSheetOpener = null;
+
+/* How many of this achievement's family are already earned, out of how many
+ * there are — not which rung it is. club-life is a set of unrelated finds,
+ * not a ladder, so a rank number would claim an order none of them keep;
+ * "X of Y" is true of every family, ladder or not. Repeatable moments (a
+ * personal best, a section kept) are not in ACHIEVEMENTS at all — they have
+ * no fixed family size to be a fraction of. */
+function achFamilyProgress(record) {
+  if (!record || record.kind === 'repeatable' || !record.family) return null;
+  const siblings = ACHIEVEMENTS.filter((item) => item.family === record.family);
+  if (siblings.length < 2) return null;
+  const unlocked = visibleUnlocks();
+  const got = siblings.filter((item) => unlocked[item.id]).length;
+  return `${got} of ${siblings.length} ${FAMILY_LABEL[record.family] || 'club milestones'}`;
+}
+
+function openAchSheet(record, opener) {
+  if (!record) return;
+  const panel = $('#ach-sheet');
+  achSheetOpener = opener || null;
+  $('#ach-sheet-h').textContent = record.title;
+  $('#ach-sheet-kind').textContent = FAMILY_LABEL[record.family] || 'club milestone';
+  // A fresh element every open, never a class toggled on a reused one: the
+  // stroke-redraw animation plays once per element, and this is what lets the
+  // same family's next find redraw again instead of arriving already-drawn.
+  $('#ach-sheet-art').innerHTML = doodle(record.art, 'ach-sheet-art redraw');
+  // Repeatable moments are recomputed at render time, so their own `at` is
+  // this render, not the day the moment first became true — stating it as an
+  // earned date would be a fabricated one.
+  const earnedLine = record.kind === 'repeatable' || !record.at
+    ? '' : ` · earned ${longDate(dayKey(record.at))}`;
+  $('#ach-sheet-desc').textContent = record.description + earnedLine;
+  const rank = achFamilyProgress(record);
+  $('#ach-sheet-rank').textContent = rank || '';
+  $('#ach-sheet-rank').hidden = !rank;
+  $('#ach-sheet-share-status').textContent = '';
+  const shareBtn = $('#ach-sheet-share');
+  shareBtn.hidden = !record.shareable;
+  shareBtn.disabled = false;
+  shareBtn.textContent = 'Share';
+  shareBtn.onclick = () => shareMoment(record, shareBtn, $('#ach-sheet-share-status'));
+  if (panel.hidden) {
+    panel.hidden = false;
+    document.body.style.overflow = 'hidden';
+    // The same containment the lightbox and notes use, for the same reason:
+    // aria-modal says the rest of the page is not there, and only inert makes
+    // that true for the Tab key. The sheet is a sibling of #app, not inerting
+    // itself.
+    setBackgroundInert(true);
+    pushStop('ach-sheet');
+  }
+  $('#ach-sheet-close').focus({ preventScroll: true });
+}
+
+function closeAchSheet(fromHistory) {
+  const panel = $('#ach-sheet');
+  if (panel.hidden) return;
+  panel.hidden = true;
+  document.body.style.overflow = '';
+  setBackgroundInert(false);
+  $('#ach-sheet-share').onclick = null;
+  if (achSheetOpener && achSheetOpener.isConnected && achSheetOpener.focus) {
+    achSheetOpener.focus({ preventScroll: true });
+  }
+  achSheetOpener = null;
+  if (!fromHistory && stops[stops.length - 1] === 'ach-sheet') history.back();
 }
 
 /* A drawing for each of the 24 chapters. Picked for the thing the chapter is
@@ -6184,6 +6255,7 @@ addEventListener('popstate', () => {
   if (top === 'notes') return closeNotes(true);
   if (top === 'card-sheet') return closeCardSheet(true);
   if (top === 'setup') return closeSetup(true);
+  if (top === 'ach-sheet') return closeAchSheet(true);
   if (top === 'study') return leaveStudy(true);
   // A tab is one press above the course's home screen, however many tabs you
   // walked through to get to this one.
@@ -6196,6 +6268,7 @@ addEventListener('popstate', () => {
   if (!$('#notes').hidden) return closeNotes(true);
   if (!$('#card-sheet').hidden) return closeCardSheet(true);
   if (!$('#setup').hidden) return closeSetup(true);
+  if (!$('#ach-sheet').hidden) return closeAchSheet(true);
   if (current === 'study' || current === 'done') return leaveStudy(true);
   // Nothing of ours is open, so this was one of those leftovers. Step past it —
   // and past any others under it, which `history.state` names — so that one
@@ -6563,35 +6636,25 @@ function wire() {
     shareMoment(monthlyMoment, e.currentTarget, $('#month-share-status')));
   $('#ach-list').addEventListener('click', (e) => {
     const row = e.target.closest('#ach-list > li.earned');
-    if (row) celebrateRow(row);
-    // The Share button and the card's own tap area name the same target
-    // through two attributes (data-share-ach / data-ach-share), never one
-    // shared attribute on both — a test (and any other exact-selector code)
-    // that reaches for "the achievement's share control" must find one match.
-    const repeatable = e.target.closest('[data-share-moment], [data-ach-share-moment]');
-    if (repeatable) {
-      const momentId = repeatable.dataset.shareMoment || repeatable.dataset.achShareMoment;
-      shareMoment(progressMoments.get(momentId), repeatable);
+    if (!row) return;
+    celebrateRow(row);
+    const tap = e.target.closest('.ach-tap');
+    if (tap.dataset.momentId) {
+      openAchSheet(progressMoments.get(tap.dataset.momentId), tap);
       return;
     }
-    const note = e.target.closest('[data-ach-note]');
-    if (note) {
-      const at = visibleUnlocks()[note.dataset.achNote];
-      const a = ACHIEVEMENTS.find((item) => item.id === note.dataset.achNote);
-      if (a && at) toast(`${a.title} · earned ${longDate(dayKey(at))}`);
-      return;
-    }
-    const button = e.target.closest('[data-share-ach], [data-ach-share]');
-    if (!button) return;
-    const unlocked = visibleUnlocks();
-    const id = button.dataset.shareAch || button.dataset.achShare;
-    const moment = AchievementEngine.record({
+    const id = tap.dataset.achId;
+    const record = AchievementEngine.record({
       id,
-      at: unlocked[id],
+      at: visibleUnlocks()[id],
       context: achievementContext(null),
       course: COURSE,
     });
-    shareMoment(moment, button);
+    openAchSheet(record, tap);
+  });
+  $('#ach-sheet-close').addEventListener('click', () => closeAchSheet(false));
+  $('#ach-sheet').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeAchSheet(false);
   });
   $('#notifications-btn').addEventListener('click', async () => {
     const status = KeepNotifications.status();
@@ -7548,6 +7611,12 @@ function wire() {
     if (!$('#setup').hidden) {
       if (e.key === 'Escape') { e.preventDefault(); closeSetup(false); return; }
       if (e.key === 'Tab') containTab($('#setup'), e);
+      return;
+    }
+    /* The achievement sheet, the same dialog contract once more. */
+    if (!$('#ach-sheet').hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeAchSheet(false); return; }
+      if (e.key === 'Tab') containTab($('#ach-sheet'), e);
       return;
     }
     if (typing) return;

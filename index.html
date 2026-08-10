@@ -445,6 +445,27 @@
   </div>
 </div>
 
+<!-- ─────────────────────────── ACHIEVEMENT SHEET ─────────────────────────── -->
+<!-- Same dialog contract, and the same .sheet/.sheet-card/.sheet-bar furniture
+     as the card editor and settings — the fourth thing to use it. Read-only, so
+     there is no form: the drawing redraws itself, the text says what it took
+     and how it sits among its own family, and only a shareable record gets a
+     way to leave the device. -->
+<div class="sheet" id="ach-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="ach-sheet-h">
+  <div class="sheet-card ach-sheet-card">
+    <div class="sheet-bar">
+      <h2 id="ach-sheet-h"></h2>
+      <button class="icon-btn" id="ach-sheet-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <p class="ach-sheet-kind" id="ach-sheet-kind"></p>
+    <span id="ach-sheet-art"></span>
+    <p class="ach-sheet-desc" id="ach-sheet-desc"></p>
+    <p class="ach-sheet-rank" id="ach-sheet-rank" hidden></p>
+    <button class="ghost wide" id="ach-sheet-share" type="button" hidden>Share</button>
+    <p class="share-status" id="ach-sheet-share-status" role="status"></p>
+  </div>
+</div>
+
 <!-- ─────────────────────────── CARD SHEET ─────────────────────────── -->
 <!-- Outside #app for the reason the notes panel is: opening it makes #app inert,
      and a sheet inside its own inert ancestor is a sheet nobody can type into.
