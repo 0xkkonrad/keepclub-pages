@@ -233,6 +233,310 @@ addEventListener('appinstalled', () => {
 
 globalThis.MuninInstall = MuninInstall;
 
+/* Screen rotation is a choice about this browser, not about one deck. Putting
+ * it in a course's settings would send it through Sync and backups, so a phone
+ * could lock a laptop and changing decks could change the way the phone turns.
+ * Missing means the browser's normal, unlocked behaviour. A value is the exact
+ * direction the person was holding the screen when they turned auto-rotation
+ * off; keeping that direction across the reload between the shelf and a course
+ * is the point of storing more than a boolean. */
+const ORIENTATION_TYPES = new Set([
+  'portrait-primary', 'portrait-secondary',
+  'landscape-primary', 'landscape-secondary',
+]);
+
+const MuninOrientation = {
+  key: 'munin/orientation-lock/v1',
+  error: null,
+  pending: false,
+  requestedAutoRotate: null,
+  applied: null,
+  needsRelease: false,
+  operation: 0,
+
+  supported() {
+    return !!(globalThis.screen && screen.orientation
+      && typeof screen.orientation.lock === 'function'
+      && typeof screen.orientation.unlock === 'function');
+  },
+
+  /* Browsers are allowed to require fullscreen or an installed web app. The
+   * existing install detector includes standalone, minimal-ui and fullscreen,
+   * so do not offer a switch that an ordinary tab is expected to reject. */
+  inLockContext() {
+    return MuninInstall.installed() || !!document.fullscreenElement;
+  },
+
+  readTarget() {
+    try {
+      const value = localStorage.getItem(MuninOrientation.key);
+      if (value === null || ORIENTATION_TYPES.has(value)) {
+        return { ok: true, target: value };
+      }
+      // No build ever writes another shape. Treat a corrupt or experimental
+      // value as the default and remove it so every tab converges there.
+      localStorage.removeItem(MuninOrientation.key);
+      return { ok: true, target: null };
+    } catch (e) {
+      MuninOrientation.error = 'storage';
+      // Unreadable is not missing. The distinction keeps a live lock in place
+      // until durable intent can be read again, rather than unlocking now and
+      // silently re-locking when storage recovers on the next lifecycle event.
+      return { ok: false, target: null };
+    }
+  },
+
+  target() {
+    const saved = MuninOrientation.readTarget();
+    return saved.ok ? saved.target : null;
+  },
+
+  current() {
+    const value = screen.orientation && screen.orientation.type;
+    return ORIENTATION_TYPES.has(value) ? value : null;
+  },
+
+  status() {
+    const saved = MuninOrientation.readTarget();
+    const target = saved.ok ? saved.target : MuninOrientation.applied;
+    return {
+      autoRotate: MuninOrientation.pending
+        && MuninOrientation.requestedAutoRotate !== null
+        ? MuninOrientation.requestedAutoRotate : !target,
+      target,
+      storageAvailable: saved.ok,
+      supported: MuninOrientation.supported(),
+      inLockContext: MuninOrientation.inLockContext(),
+      pending: MuninOrientation.pending,
+      error: MuninOrientation.error,
+    };
+  },
+
+  refresh() {
+    globalThis.renderOrientationSetting?.();
+  },
+
+  begin(autoRotate) {
+    const operation = ++MuninOrientation.operation;
+    MuninOrientation.pending = true;
+    MuninOrientation.requestedAutoRotate = autoRotate;
+    MuninOrientation.refresh();
+    return operation;
+  },
+
+  finish(operation, error) {
+    if (operation !== MuninOrientation.operation) return false;
+    MuninOrientation.pending = false;
+    MuninOrientation.requestedAutoRotate = null;
+    MuninOrientation.error = error || null;
+    MuninOrientation.refresh();
+    return true;
+  },
+
+  refuse(error) {
+    MuninOrientation.operation++;
+    MuninOrientation.pending = false;
+    MuninOrientation.requestedAutoRotate = null;
+    MuninOrientation.error = error;
+    MuninOrientation.refresh();
+    return false;
+  },
+
+  async apply(knownTarget) {
+    let target = knownTarget;
+    if (target === undefined) {
+      const saved = MuninOrientation.readTarget();
+      if (!saved.ok) {
+        MuninOrientation.refresh();
+        return false;
+      }
+      target = saved.target;
+    }
+    if (!target) return MuninOrientation.release();
+    if (document.hidden) return false;
+    if (!MuninOrientation.supported()) return MuninOrientation.refuse('unsupported');
+    if (!MuninOrientation.inLockContext()) return MuninOrientation.refuse('install');
+    const operation = MuninOrientation.begin(false);
+    try {
+      await screen.orientation.lock(target);
+      if (operation !== MuninOrientation.operation) return false;
+      MuninOrientation.applied = target;
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    } catch (e) {
+      // A newer reconcile deliberately aborts an older lock. Only the newest
+      // operation is allowed to draw the state it owns.
+      if (operation !== MuninOrientation.operation) return false;
+      MuninOrientation.finish(operation, 'failed');
+      return false;
+    }
+  },
+
+  /* Make this document agree with a missing preference. In particular, a
+   * storage event can arrive while the tab is hidden, when unlock() is allowed
+   * to throw. Remember the work and retry it on the foreground event. */
+  release() {
+    if (!MuninOrientation.pending && !MuninOrientation.applied
+        && !MuninOrientation.needsRelease) {
+      MuninOrientation.error = null;
+      MuninOrientation.refresh();
+      return true;
+    }
+    if (document.hidden) {
+      MuninOrientation.operation++;
+      MuninOrientation.pending = false;
+      MuninOrientation.requestedAutoRotate = null;
+      MuninOrientation.needsRelease = true;
+      MuninOrientation.error = null;
+      MuninOrientation.refresh();
+      return false;
+    }
+    const operation = MuninOrientation.begin(true);
+    if (!MuninOrientation.supported()) {
+      MuninOrientation.applied = null;
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    }
+    try {
+      screen.orientation.unlock();
+      MuninOrientation.applied = null;
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    } catch (e) {
+      MuninOrientation.needsRelease = true;
+      MuninOrientation.finish(operation, 'failed');
+      return false;
+    }
+  },
+
+  reconcile() {
+    const saved = MuninOrientation.readTarget();
+    if (!saved.ok) {
+      MuninOrientation.refresh();
+      return Promise.resolve(false);
+    }
+    return saved.target
+      ? MuninOrientation.apply(saved.target) : Promise.resolve(MuninOrientation.release());
+  },
+
+  async disable() {
+    if (!MuninOrientation.readTarget().ok) return MuninOrientation.refuse('storage');
+    if (!MuninOrientation.supported()) return MuninOrientation.refuse('unsupported');
+    if (!MuninOrientation.inLockContext()) return MuninOrientation.refuse('install');
+    const target = MuninOrientation.current();
+    if (!target) return MuninOrientation.refuse('failed');
+    const operation = MuninOrientation.begin(false);
+    try {
+      // Persist only a lock the browser actually accepted. A rejected request
+      // leaves the checked control and the browser's behaviour in agreement.
+      await screen.orientation.lock(target);
+      if (operation !== MuninOrientation.operation) return false;
+      MuninOrientation.applied = target;
+      try {
+        localStorage.setItem(MuninOrientation.key, target);
+      } catch (e) {
+        try {
+          screen.orientation.unlock();
+          MuninOrientation.applied = null;
+          MuninOrientation.needsRelease = false;
+        } catch (unlockError) {
+          MuninOrientation.needsRelease = true;
+        }
+        MuninOrientation.finish(operation, 'storage');
+        return false;
+      }
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    } catch (e) {
+      if (operation !== MuninOrientation.operation) return false;
+      MuninOrientation.finish(operation, 'failed');
+      return false;
+    }
+  },
+
+  enable() {
+    const saved = MuninOrientation.readTarget();
+    if (!saved.ok) return MuninOrientation.refuse('storage');
+    const target = saved.target;
+    const operation = MuninOrientation.begin(true);
+    // Change durable intent first. If storage refuses, the physical lock is
+    // untouched and the unchecked control rolls back without a split state.
+    try {
+      localStorage.removeItem(MuninOrientation.key);
+    } catch (e) {
+      MuninOrientation.finish(operation, 'storage');
+      return false;
+    }
+    // A normal tab or a browser which lost API support can still clear the
+    // saved choice for the next installed-app launch. This document only needs
+    // an API call if it was the document that applied the lock.
+    if (!MuninOrientation.applied && !MuninOrientation.needsRelease) {
+      MuninOrientation.finish(operation, null);
+      return true;
+    }
+    if (!MuninOrientation.supported()) {
+      MuninOrientation.applied = null;
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    }
+    try {
+      screen.orientation.unlock();
+      MuninOrientation.applied = null;
+      MuninOrientation.needsRelease = false;
+      MuninOrientation.finish(operation, null);
+      return true;
+    } catch (e) {
+      // unlock() did not happen. Restore the preference so both the control and
+      // the next document keep describing the lock still on this one.
+      if (target) {
+        try { localStorage.setItem(MuninOrientation.key, target); }
+        catch (storageError) {
+          MuninOrientation.needsRelease = true;
+          MuninOrientation.finish(operation, 'storage');
+          return false;
+        }
+      }
+      MuninOrientation.finish(operation, 'failed');
+      return false;
+    }
+  },
+
+  setAutoRotate(autoRotate) {
+    return autoRotate ? Promise.resolve(MuninOrientation.enable()) : MuninOrientation.disable();
+  },
+};
+globalThis.MuninOrientation = MuninOrientation;
+
+/* A lock ends with its document. Reapply it when a saved page returns or the
+ * installed app comes back to the foreground, and keep two open tabs on the
+ * same device in step. */
+addEventListener('pageshow', (event) => {
+  if (event.persisted) MuninOrientation.reconcile();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) MuninOrientation.reconcile();
+});
+addEventListener('focus', () => MuninOrientation.reconcile());
+addEventListener('storage', (event) => {
+  if (event.key !== MuninOrientation.key && event.key !== null) return;
+  MuninOrientation.reconcile();
+});
+document.addEventListener('fullscreenchange', () => {
+  // Leaving Fullscreen automatically releases its orientation lock. An
+  // installed app can immediately reapply the saved target; an ordinary tab
+  // will instead show the install/fullscreen requirement until re-entry.
+  if (!document.fullscreenElement) {
+    MuninOrientation.applied = null;
+    MuninOrientation.needsRelease = false;
+  }
+  MuninOrientation.reconcile();
+});
+
 /* The picker's copy of the offer. First run is the one moment the app can say
  * "keep me" before anyone has picked anything, so it sits under the tiles —
  * below the thing you came for, never in front of it. It needs no dismissal:
@@ -2114,6 +2418,7 @@ addEventListener('popstate', () => {
 (async function main() {
   const migrationSay = await receiveLegacyMigration();
   MuninTheme.apply();
+  MuninOrientation.reconcile();
   initPullToRefresh();
   registerWorker();
   watchBoot();

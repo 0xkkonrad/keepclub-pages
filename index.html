@@ -598,6 +598,15 @@
 
     <details class="how setup-g">
       <summary id="setup-device">This device</summary>
+      <div class="settings">
+        <label class="setting row" id="orientation-row">
+          <input type="checkbox" id="set-auto-rotate">
+          <span>Auto-rotate screen
+            <small id="orientation-hint" aria-live="polite">Turn this off to keep the screen in its current direction.</small>
+          </span>
+        </label>
+      </div>
+
       <!-- Installing is a control you come looking for, not a nudge. Hidden in
            the markup and only ever revealed by app.js — whether it is possible
            at all is something only the browser knows, and an app already

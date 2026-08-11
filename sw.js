@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: '47530a4e0a', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': '805d4f0dd9', 'git-101': '9e570c7079', 'toki-pona': '8db6ef1cad' } };
+const BUILD = { shell: 'c7526f1fb5', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': '805d4f0dd9', 'git-101': '9e570c7079', 'toki-pona': '8db6ef1cad' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -227,10 +227,14 @@ self.addEventListener('install', (e) => {
           // Optional 404 is part of the course format. A server error or a
           // captive-portal body is a partial deploy, and must reject this
           // generation rather than evicting the last complete one.
-          if (r.status === 404 && !REQUIRED_COURSE.includes(f)) continue;
+          if (r.status === 404 && !REQUIRED_COURSE.includes(f)) {
+            await r.body?.cancel();
+            continue;
+          }
           if (!ok(r, typeFor(f))) {
             healthy = false;
             console.warn('munin: ' + id + '/' + f + ' returned an invalid response');
+            await r.body?.cancel();
             continue;
           }
           await cache.put(path, r);

@@ -6087,6 +6087,7 @@ function renderSetup() {
   build.textContent = `${plural(DECK.cards.length, 'card')} in this deck.`;
   build.title = `Deck build ${DECK.buildFingerprint || 'unknown'}`;
   applyFontSize();
+  renderOrientationSetting();
   renderOffline();
   renderInstall();
   renderNotifications();
@@ -6094,6 +6095,43 @@ function renderSetup() {
   renderDeckFileState();
   renderSyncState();
 }
+
+/* This setting belongs to the shell and this browser, not to `state.settings`:
+ * changing it must never stamp, sync or back up the deck under the sheet. */
+function renderOrientationSetting() {
+  const input = $('#set-auto-rotate');
+  const hint = $('#orientation-hint');
+  if (!input || !hint || !globalThis.MuninOrientation) return;
+  const status = MuninOrientation.status();
+  input.checked = status.autoRotate;
+  // Locking needs the API and an installed/fullscreen context. Clearing a
+  // saved lock does not: leave an unchecked control usable in an ordinary tab
+  // so nobody is trapped in a choice they made in the installed app.
+  input.disabled = !status.storageAvailable || (status.autoRotate
+    && (!status.supported || !status.inLockContext));
+  input.setAttribute('aria-busy', status.pending ? 'true' : 'false');
+
+  if (status.pending) {
+    hint.textContent = 'Changing the screen rotation…';
+  } else if (status.error === 'storage') {
+    hint.textContent = 'Could not remember this choice on this device.';
+  } else if (status.target && !status.supported) {
+    hint.textContent = 'A screen lock is saved. Turn this on to clear it; this browser cannot apply it.';
+  } else if (status.target && !status.inLockContext) {
+    hint.textContent = 'Saved for the installed app. Turn this on to clear it here.';
+  } else if (!status.supported) {
+    hint.textContent = 'Use this device’s rotation lock — this browser cannot control it.';
+  } else if (!status.inLockContext) {
+    hint.textContent = 'Available when keep club is installed or open full screen.';
+  } else if (status.error) {
+    hint.textContent = 'Could not change the rotation. The screen may still rotate.';
+  } else if (status.target) {
+    hint.textContent = `Locked in ${status.target.startsWith('portrait') ? 'portrait' : 'landscape'}.`;
+  } else {
+    hint.textContent = 'Turn this off to keep the screen in its current direction.';
+  }
+}
+globalThis.renderOrientationSetting = renderOrientationSetting;
 
 /** Re-draw the sheet when the state under it was replaced by another tab, a
  *  merge or a restore, rather than leaving settings that are no longer set. */
@@ -6661,6 +6699,25 @@ function wire() {
     if (status.enabled) KeepNotifications.disable();
     else await KeepNotifications.enable();
     renderNotifications();
+  });
+
+  $('#set-auto-rotate').addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    // Keep the native control focusable while lock() settles. A second change
+    // during that short window is redrawn to the in-flight request rather than
+    // starting a competing platform operation.
+    if (MuninOrientation.pending) {
+      renderOrientationSetting();
+      return;
+    }
+    const autoRotate = input.checked;
+    const changed = await MuninOrientation.setAutoRotate(autoRotate);
+    renderOrientationSetting();
+    if (!changed) {
+      toast(autoRotate
+        ? 'Could not turn auto-rotation back on in this browser.'
+        : 'Could not lock the screen in its current direction.');
+    }
   });
 
   $('#theme-btn').addEventListener('click', () => {

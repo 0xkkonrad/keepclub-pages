@@ -1640,6 +1640,7 @@ mark {
 }
 .setting.row { justify-content: flex-start; gap: 12px; }
 .setting.row input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.setting.row > span { flex: 1 1 13rem; min-width: 0; }
 .setting small { display: block; color: var(--muted); font-size: .74rem; margin-top: 3px; line-height: 1.5; }
 .backup-state {
   margin: 14px 0; padding: 12px 14px;
