@@ -6632,7 +6632,6 @@ function applyFontSize() {
 /* ─────────────────────────── wiring ─────────────────────────── */
 
 function wire() {
-  let prefetchRequest = '';
   $$('#nav button').forEach((b) => b.addEventListener('click', () => goTab(b.dataset.go)));
 
   $('#study-all').addEventListener('click', (e) => {
@@ -7563,9 +7562,21 @@ function wire() {
       }
       btn.disabled = false;
       prefetchRequest = '';
-      btn.textContent = d.failed
-        ? `${d.total - d.failed} of ${d.total} saved — retry the rest`
-        : `All ${d.total === 1 ? 'saved' : 'diagrams saved'} offline ✓`;
+      if (!d.failed) {
+        btn.textContent = `All ${d.total === 1 ? 'saved' : 'diagrams saved'} offline ✓`;
+        return;
+      }
+      if (d.failed < d.total) {
+        btn.textContent = `${d.total - d.failed} of ${d.total} saved — retry the rest`;
+        return;
+      }
+      // Nothing saved is not "0 of 24 saved — retry the rest". A count that
+      // climbs to the whole deck and then prints 0 reads as a reset, and the
+      // sentence never said which of the two things had gone wrong.
+      btn.textContent = d.unreachable ? 'No connection — nothing saved' : 'Nothing saved';
+      toast(`The ${plural(d.total, 'diagram')} could not be downloaded: ` + (d.unreachable
+        ? 'the app could not reach the server. Try again once you have a signal.'
+        : 'the server answered, but not with them. Try again later.'), true);
     });
   }
 
@@ -7748,6 +7759,10 @@ function workerReg() {
   return navigator.serviceWorker.getRegistration().then((r) => r || null).catch(() => null);
 }
 
+/* The save in flight, if there is one. Module scope because renderOffline()
+ * is the thing that must not tread on it. */
+let prefetchRequest = '';
+
 /* Offline, said in this deck's numbers — and in this browser's.
  *
  * How many diagrams there are, and whether there are any, is a fact about the
@@ -7783,6 +7798,10 @@ function renderOffline() {
         + `need a signal. Open it once more with one — a private window will never keep it. `
         + `Your progress is on the device either way.`;
     const btn = $('#prefetch-btn');
+    // A save already running owns this button. Redrawing the sheet — which a
+    // merge from another tab does on its own — used to reset the count to the
+    // offer while the worker was still downloading behind it.
+    if (prefetchRequest) return;
     btn.disabled = !worker;
     btn.textContent = !worker
       ? 'Nothing to save into yet'
