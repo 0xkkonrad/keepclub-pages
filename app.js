@@ -7541,12 +7541,20 @@ function wire() {
       toast('Offline storage is still starting up — try again in a moment.');
       return;
     }
-    const urls = Array.from(new Set(offlineImages().map(courseMediaUrl)));
+    // Only what is missing, so the count that runs is the count the button
+    // offered — the whole list would have "Save the remaining 7" counting to 24.
+    const urls = diagramUrls();
+    const have = await savedDiagrams(urls);
+    const todo = urls.filter((u) => !have.has(u));
+    if (!todo.length) {
+      renderOffline();
+      return;
+    }
     btn.disabled = true;
-    btn.textContent = `Saving 0 of ${urls.length}…`;
+    btn.textContent = `Saving 0 of ${todo.length}…`;
     prefetchRequest = (crypto.randomUUID && crypto.randomUUID())
       || Date.now().toString(36) + Math.random().toString(36).slice(2);
-    reg.active.postMessage({ type: 'prefetch', urls, requestId: prefetchRequest });
+    reg.active.postMessage({ type: 'prefetch', urls: todo, requestId: prefetchRequest });
   });
   // Registered once, not inside the click handler — a listener added per click
   // stacks up and every future completion fires all of them.
@@ -7562,21 +7570,23 @@ function wire() {
       }
       btn.disabled = false;
       prefetchRequest = '';
+      // What happened is said once, here; what is stored is re-counted from the
+      // caches. The button used to hold the result, so it sat reading "All
+      // diagrams saved offline ✓" and still invited a press, and a run that
+      // saved nothing printed "0 of 24 saved" after counting up to 24.
       if (!d.failed) {
-        btn.textContent = `All ${d.total === 1 ? 'saved' : 'diagrams saved'} offline ✓`;
-        return;
+        toast(`${plural(d.total, 'diagram')} saved on this device.`);
+      } else {
+        const why = d.unreachable
+          ? 'the app could not reach the server. Try again once you have a signal.'
+          : 'the server answered, but not with them. Try again later.';
+        const which = d.failed < d.total
+          ? `${plural(d.failed, 'diagram')} could not be downloaded`
+          : d.total === 1 ? 'The diagram could not be downloaded'
+            : `None of the ${d.total} diagrams could be downloaded`;
+        toast(`${which}: ${why}`, true);
       }
-      if (d.failed < d.total) {
-        btn.textContent = `${d.total - d.failed} of ${d.total} saved — retry the rest`;
-        return;
-      }
-      // Nothing saved is not "0 of 24 saved — retry the rest". A count that
-      // climbs to the whole deck and then prints 0 reads as a reset, and the
-      // sentence never said which of the two things had gone wrong.
-      btn.textContent = d.unreachable ? 'No connection — nothing saved' : 'Nothing saved';
-      toast(`The ${plural(d.total, 'diagram')} could not be downloaded: ` + (d.unreachable
-        ? 'the app could not reach the server. Try again once you have a signal.'
-        : 'the server answered, but not with them. Try again later.'), true);
+      renderOffline();
     });
   }
 
@@ -7770,10 +7780,35 @@ let prefetchRequest = '';
  * a three-picture deck and over imported decks with no diagrams at all, above
  * a button that then downloaded nothing. Whether any of it is stored at all is
  * a fact about the browser, and was assumed. */
+/** Which of this deck's diagrams are stored AND still an image.
+ *
+ * Validity, not presence: a captive-portal page cached under an image URL
+ * counts as missing here, so the save that follows fetches it again rather
+ * than reporting the deck complete over a stored sign-in form. */
+async function savedDiagrams(urls) {
+  const stored = async (u) => {
+    try {
+      const hit = await caches.match(u);
+      if (!hit || !hit.ok) return null;
+      const got = (hit.headers.get('content-type') || '').split(';')[0].trim();
+      // Some static servers say nothing at all, which the worker also accepts.
+      return !got || /^image\//.test(got) ? u : null;
+    } catch (e) { return null; }   // storage blocked: nothing is stored
+  };
+  return new Set((await Promise.all(urls.map(stored))).filter(Boolean));
+}
+
+/** Every diagram this deck ships, as absolute URLs. */
+function diagramUrls() {
+  return Array.from(new Set(offlineImages().map(
+    (item) => new URL(courseMediaUrl(item), location.href).href)));
+}
+
 function renderOffline() {
   const card = $('#offline-card');
   if (!card) return;
-  const shots = new Set(offlineImages().map((item) => item.source));
+  const items = offlineImages();
+  const shots = new Set(items.map((item) => item.source));
   if (!shots.size) {
     // An imported deck keeps its pictures in the database with its cards;
     // there is nothing to fetch and nothing to say.
@@ -7781,36 +7816,65 @@ function renderOffline() {
     return;
   }
   card.hidden = false;
-  const many = shots.size > 1;
-  // What is true in this browser, not what is true when everything worked. A
-  // browser that has stored nothing — a private window, a refused or failed
-  // registration — was told the cards already worked offline, above a button
-  // that could not save a thing.
-  const say = (worker) => {
-    // The line that used to open this said the cards work offline once you
-    // have opened the app, which is the app describing itself rather than
-    // telling you anything you can act on. What is left is the deck's own
-    // count and the one decision it asks for.
-    $('#offline-note').textContent = worker
-      ? `The ${shots.size} diagram${many ? 's are' : ' is'} saved as you meet ${many ? 'them' : 'it'} — `
-        + `pull ${many ? 'them all' : 'it'} down now if you are heading somewhere without signal.`
-      : `This browser has not stored the app, so the cards and the ${many ? 'diagrams' : 'diagram'} `
-        + `need a signal. Open it once more with one — a private window will never keep it. `
-        + `Your progress is on the device either way.`;
-    const btn = $('#prefetch-btn');
-    // A save already running owns this button. Redrawing the sheet — which a
+  const total = shots.size;
+  const many = total > 1;
+  const urls = diagramUrls();
+  // True before the browser has answered and true again once it says it holds
+  // none of them, so both states say it rather than inventing a second line.
+  const meetLine = `The ${total} diagram${many ? 's are' : ' is'} saved as you meet `
+    + `${many ? 'them' : 'it'} — pull ${many ? 'them all' : 'it'} down now if you `
+    + `are heading somewhere without signal.`;
+  // The line says what is stored; the button offers what is left to store.
+  // They used to be one control, so a finished save left "All diagrams saved
+  // offline ✓" printed on a button that was still asking to be pressed.
+  const say = (worker, saved) => {
+    // A save already running owns this section. Redrawing the sheet — which a
     // merge from another tab does on its own — used to reset the count to the
     // offer while the worker was still downloading behind it.
     if (prefetchRequest) return;
-    btn.disabled = !worker;
-    btn.textContent = !worker
-      ? 'Nothing to save into yet'
+    const note = $('#offline-note');
+    const btn = $('#prefetch-btn');
+    if (saved === null) {
+      // Nothing to offer until the browser says what it already holds.
+      note.textContent = meetLine;
+      btn.hidden = true;
+      return;
+    }
+    if (!worker) {
+      // A browser that has stored nothing — a private window, a refused or
+      // failed registration — was told the cards already worked offline.
+      note.textContent = `This browser has not stored the app, so the cards and the `
+        + `${many ? 'diagrams' : 'diagram'} need a signal. Open it once more with one — `
+        + `a private window will never keep it. Your progress is on the device either way.`;
+      btn.hidden = false;
+      btn.disabled = true;
+      btn.textContent = 'Nothing to save into yet';
+      return;
+    }
+    const left = total - saved;
+    if (!left) {
+      note.textContent = many
+        ? `All ${total} diagrams are saved on this device.`
+        : 'The diagram is saved on this device.';
+      btn.hidden = true;
+      return;
+    }
+    note.textContent = saved
+      ? `${saved} of the ${total} diagrams are saved on this device — pull the rest `
+        + `down now if you are heading somewhere without signal.`
+      : meetLine;
+    btn.hidden = false;
+    btn.disabled = false;
+    btn.textContent = saved
+      ? `Save the remaining ${plural(left, 'diagram')}`
       : many ? 'Save all diagrams offline' : 'Save the diagram offline';
   };
-  // Said as it has always been said, then said again when the browser answers:
-  // this screen is drawn in one go and the answer is a promise.
-  say(true);
-  workerReg().then((reg) => say(!!reg));
+  // The deck's own count can be said at once; what this browser has stored is
+  // a promise, and the button waits for it rather than guessing.
+  say(true, null);
+  workerReg()
+    .then((reg) => (reg ? savedDiagrams(urls) : null))
+    .then((have) => say(!!have, have ? have.size : 0));
 }
 
 /** Whatever went wrong, said on the loading screen the course is already
