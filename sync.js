@@ -12,8 +12,8 @@
 (function (root) {
 
 const ENDPOINT = 'https://dyaxdgpaideblyhpxyft.supabase.co';
-// Publishable by design. The anon key grants access only to two RPC functions,
-// and both require a non-enumerable key hash.
+// Publishable by design. The anon key grants access only to the versioned sync
+// RPC boundary, and every call requires a non-enumerable key hash.
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5YXhkZ3BhaWRlYmx5aHB4eWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMTg2MjUsImV4cCI6MjEwMDY5NDYyNX0.CDDeyQso3XnxiYg0f5x4uy99n6JoyHgEqm1cJN0wvIk';
 
 // This odd-looking name shipped with the disabled transport. It is retained
@@ -26,6 +26,9 @@ const GROUP = 5;
 const RETRY_WAIT = 1200;
 const MAX_ROUNDS = 4;
 const REQUEST_TIMEOUT = 15000;
+// The RPC name is the writer capability. Once a row has been written by this
+// version, the backend refuses legacy writers that would erase pv and sr.
+const WRITER_VERSION = 2;
 
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : (d || 0));
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
@@ -35,6 +38,7 @@ let cfg = {
   app: '',
   supported: false,
   sanitise: (s) => s,
+  reconcile: (s) => s,
   onMerged: () => {},
   onStatus: () => {},
 };
@@ -218,26 +222,124 @@ function stable(value) {
   return JSON.stringify(value === undefined ? null : value);
 }
 
-function pickRec(x, y) {
-  if (!x) return y;
-  if (!y) return x;
-  let winner;
-  if (num(x.rp) !== num(y.rp)) winner = num(x.rp) > num(y.rp) ? x : y;
-  // Equal review counts are divergent answers to the same card. Keep the
-  // relearning schedule when only one device lapsed, then the earlier due
-  // date. Lapse count itself cannot choose the schedule: it is merged by max
-  // below, and feeding that derived value back into the comparison made a
-  // three-device merge depend on grouping order.
-  else if ((x.st === 'l') !== (y.st === 'l')) winner = x.st === 'l' ? x : y;
-  else if (num(x.due) !== num(y.due)) winner = num(x.due) < num(y.due) ? x : y;
-  else {
-    const xSchedule = Object.assign({}, x, { lp: 0 });
-    const ySchedule = Object.assign({}, y, { lp: 0 });
-    winner = stable(xSchedule) <= stable(ySchedule) ? x : y;
+// `pv` is the strongest interval this lapse epoch has proved, even when an
+// approaching exam keeps the actual scheduled interval (`ivl`) shorter. Old
+// clients wrote pv=0 for review cards, so their interval is the compatible
+// fallback. A valid `sr` marks a canonical record, so zero on one of those stays
+// zero; malformed property presence is not allowed to certify zero proof.
+// A learning card's ivl is only its next step, never proof.
+function hasScheduleRevision(record) {
+  if (!record || !Object.prototype.hasOwnProperty.call(record, 'sr')) return false;
+  const rp = num(record.rp);
+  const sr = record.sr;
+  return typeof sr === 'number'
+    && Number.isInteger(sr) && sr >= 0 && sr <= rp;
+}
+
+function provenInterval(record) {
+  const proof = num(record && record.pv);
+  if (proof > 0) return proof;
+  const legacy = record && !hasScheduleRevision(record);
+  return legacy && record.st === 'r' ? Math.max(0, num(record.ivl)) : 0;
+}
+
+const EXAM_COMMIT_LIMIT = 8;
+
+function examCommits(record) {
+  const out = {};
+  const interval = Math.max(0, num(record && record.ivl));
+  const entries = Object.entries(obj(record && record.ec))
+    .filter(([date, value]) => /^\d{4}-\d{2}-\d{2}$/.test(date)
+      && typeof value === 'number' && Number.isInteger(value)
+      && value >= 1 && value <= interval)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .slice(0, EXAM_COMMIT_LIMIT);
+  for (const [date, value] of entries) out[date] = value;
+  return out;
+}
+
+function scheduleKey(record) {
+  return stable(Object.assign({}, record, {
+    rp: 0, lp: 0, pv: 0, ec: {},
+  }));
+}
+
+/** Join answer-button promises only across byte-identical answer revisions.
+ * A losing different schedule can never become the total-order winner later,
+ * so its projection is irrelevant. Identical schedules can arise on devices
+ * with different exam settings at the same revision; retain both dates, and
+ * choose the earlier interval when the same date somehow produced two
+ * promises. `sr` stays in the identity: the same ivl/due can recur at a newer
+ * revision, and allowing an older promise to attach to that answer made a
+ * three-device merge depend on grouping. */
+function joinedExamCommits(records, winner) {
+  const joined = {};
+  const key = scheduleKey(winner);
+  for (const record of records) {
+    if (scheduleKey(record) !== key) continue;
+    for (const [date, interval] of Object.entries(examCommits(record))) {
+      if (!joined[date] || interval < joined[date]) joined[date] = interval;
+    }
   }
-  // Lapses are a lifetime counter. A later review record can legitimately win
-  // the schedule while still having forked before a lapse on another device.
-  return Object.assign({}, winner, { lp: Math.max(num(x.lp), num(y.lp)) });
+  return Object.fromEntries(Object.entries(joined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .slice(0, EXAM_COMMIT_LIMIT));
+}
+
+function canonicalRec(record) {
+  if (!record) return undefined;
+  const rp = Math.max(0, num(record.rp));
+  const saved = hasScheduleRevision(record) ? record.sr : rp;
+  const canonical = Object.assign({}, record, {
+    rp,
+    sr: saved,
+    // lp is a causal epoch on this schedule branch, so it cannot outrun sr.
+    lp: Math.min(saved, Math.max(0, num(record.lp))),
+    pv: provenInterval(record),
+  });
+  const commits = examCommits(canonical);
+  if (Object.keys(commits).length) canonical.ec = commits;
+  else delete canonical.ec;
+  return canonical;
+}
+
+function pickRec(rawX, rawY) {
+  const x = canonicalRec(rawX);
+  const y = canonicalRec(rawY);
+  if (!x && !y) return undefined;
+  const lapses = Math.max(num(x && x.lp), num(y && y.lp));
+  const current = [x, y].filter((record) => record && record.lp === lapses);
+  let winner = current[0];
+  for (const record of current.slice(1)) {
+    if (record.sr !== winner.sr) winner = record.sr > winner.sr ? record : winner;
+    // Equal schedule revisions are divergent answers to the same card. Keep
+    // relearning, then the earlier due date, as the conservative total order.
+    else if ((record.st === 'l') !== (winner.st === 'l')) {
+      winner = record.st === 'l' ? record : winner;
+    } else if (num(record.due) !== num(winner.due)) {
+      winner = num(record.due) < num(winner.due) ? record : winner;
+    } else {
+      // History and proof are derived joins. Blanking them prevents a merge's
+      // synthetic maxima from influencing a later schedule tie.
+      const a = Object.assign({}, record, { rp: 0, sr: 0, lp: 0, pv: 0, ec: {} });
+      const b = Object.assign({}, winner, { rp: 0, sr: 0, lp: 0, pv: 0, ec: {} });
+      winner = stable(a) <= stable(b) ? record : winner;
+    }
+  }
+
+  // Schedule, answer history and proof are separate monotonic facts. Restrict
+  // schedule and proof to the newest lapse epoch, but retain the largest answer
+  // count even when it came from an older offline branch.
+  const merged = Object.assign({}, winner, {
+    rp: Math.max(num(x && x.rp), num(y && y.rp)),
+    sr: winner.sr,
+    lp: lapses,
+    pv: Math.max(...current.map((record) => record.pv)),
+  });
+  const commits = joinedExamCommits(current, winner);
+  if (Object.keys(commits).length) merged.ec = commits;
+  else delete merged.ec;
+  return merged;
 }
 
 function prevKey(key) {
@@ -634,14 +736,20 @@ async function syncOnce(local, generation) {
   if (!record) throw new Error('sync is off');
   const keyHash = await hashKey(record.key);
 
-  let state = local;
+  // Reconcile even when GET finds no row: the first upload is still an ingress
+  // boundary and must not publish a schedule inconsistent with its exam.
+  let state = cfg.reconcile(cfg.sanitise(local));
   let rev = 0;
   let changed = false;
-  const rows = await rpc('sync_get', { p_app: cfg.app, p_key_hash: keyHash });
+  const rows = await rpc('sync_get_v2', {
+    p_app: cfg.app,
+    p_key_hash: keyHash,
+    p_writer_version: WRITER_VERSION,
+  });
   if (Array.isArray(rows) && rows.length) {
     rev = num(rows[0].rev);
     const remote = cfg.sanitise(rows[0].data);
-    const merged = mergeState(local, remote);
+    const merged = cfg.reconcile(mergeState(local, remote));
     changed = stable(merged) !== stable(remote);
     state = merged;
   } else {
@@ -667,11 +775,12 @@ async function syncOnce(local, generation) {
     }
     let result;
     try {
-      result = await rpc('sync_put', {
+      result = await rpc('sync_put_v2', {
         p_app: cfg.app,
         p_key_hash: keyHash,
         p_rev: rev,
         p_data: state,
+        p_writer_version: WRITER_VERSION,
       });
     } catch (error) {
       // A first-write race produces 23505: both devices observed no row and
@@ -693,7 +802,7 @@ async function syncOnce(local, generation) {
     }
     rev = num(row && row.rev);
     const theirs = cfg.sanitise(row && row.data);
-    state = mergeState(state, theirs);
+    state = cfg.reconcile(mergeState(state, theirs));
     changed = stable(state) !== stable(theirs);
     if (changed) await sleep(RETRY_WAIT);
   }
@@ -768,6 +877,7 @@ function init(options) {
 root.DSSync = {
   KEY,
   KEY_CHARS,
+  WRITER_VERSION,
   ENDPOINT,
   init,
   enabled,
