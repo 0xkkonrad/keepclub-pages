@@ -6,7 +6,7 @@
 <!-- One tag, set from JS: the app's own light/dark/auto toggle has to win over
      the system preference here too, or the browser bar and the page disagree. -->
 <meta name="theme-color" id="theme-color" content="#f0eee7">
-<meta name="description" content="keep club — membership pays in memories. Pick a course, keep your progress on your device.">
+<meta name="description" content="keep club — membership pays in memories. Pick a course and keep progress in your browser profile.">
 <title>keep club</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" sizes="192x192">
@@ -93,7 +93,7 @@
                 aria-label="Close" title="Close">✕</button>
         <!-- Written by app.js: what is true of a 537-card syllabus is not true
              of an eleven-card deck someone just imported. -->
-        <p id="ask-why">A date sets your daily pace and stops scheduling past it.</p>
+        <p id="ask-why">A future date may raise your new-card pace and bring reviews forward.</p>
         <label class="sr" for="home-exam">Exam date</label>
         <input type="date" id="home-exam">
         <p class="ask-parsed" id="home-exam-parsed"></p>
@@ -101,7 +101,7 @@
 
       <button class="trouble" id="leech-row" hidden>
         <span></span>
-        <small>Answering them again is not working — go and read them</small>
+        <small>A history flag, even after recovery — revisit the source if it still feels weak</small>
       </button>
 
       <h2 class="h-sect">Sections</h2>
@@ -147,7 +147,7 @@
 
     <main class="body card-body" id="card-scroll">
       <div class="qa">
-        <p class="chip-row"><span class="chip" id="card-chip"></span><span class="chip warn" id="leech-chip" hidden>keeps slipping</span></p>
+        <p class="chip-row"><span class="chip" id="card-chip"></span><span class="chip warn" id="leech-chip" hidden>missed 3+ times</span></p>
         <div class="question" id="card-q"></div>
         <div class="side-media" id="card-front-media"></div>
         <div id="answer-wrap" aria-live="polite" hidden>
@@ -336,6 +336,8 @@
     </header>
     <main class="body">
       <div class="tiles" id="stat-tiles"></div>
+      <p class="stat-help"><a id="progress-guide" href="docs/studying/#progress"
+        target="_blank" rel="noopener">What do solid, seen, and learning mean?</a></p>
       <!-- The two repeat-card facts, once there are any to state. Written by
            renderStats(); hidden until the deck has handed a card back. -->
       <p class="stat-say" id="repeat-line" hidden></p>
@@ -589,18 +591,20 @@
           <input type="date" id="set-exam">
         </label>
         <label class="setting">
-          <span>New cards a day <small id="new-hint"></small></span>
+          <span>New cards in the daily plan <small id="new-hint"></small></span>
           <input type="number" id="set-new" min="0" max="200" step="5" inputmode="numeric">
         </label>
         <label class="setting">
           <span>Most cards to repeat in one day
-            <small>Anything over this waits until tomorrow.</small></span>
+            <small>Anything over this is left out of today’s recorded Study.</small></span>
           <input type="number" id="set-max" min="10" max="999" step="10" inputmode="numeric">
         </label>
         <label class="setting row">
           <input type="checkbox" id="set-shuffle">
           <span>Mix sections together <small>Stops you recognising an answer from the cards around it</small></span>
         </label>
+        <p class="fineprint"><a id="studying-guide" href="docs/studying/"
+          target="_blank" rel="noopener">How scheduling and progress work</a></p>
       </div>
     </details>
 
@@ -648,10 +652,11 @@
       <summary id="setup-keeping">Keeping your progress</summary>
       <h3 class="h-sect">Sync</h3>
       <p class="fineprint">
-        Study on your phone and your laptop and keep one set of progress, notes
-        and cards. Turn it on here, then type the key it gives you into the
-        other device. There is no account and no email — the key is the only
-        way in, so keep it, and anyone you give it to shares your deck.
+        Study built-in courses on your phone and laptop with one set of progress,
+        notes, and cards you write. Turn Sync on here, then type its key into the
+        other browser. There is no account or email. The same key covers every
+        built-in course that uses it, so anyone who has it can access all of that
+        synced data. Protect it like a password. Imported decks do not Sync.
       </p>
       <p class="backup-state" id="sync-state"></p>
       <p class="sync-key" id="sync-key" hidden></p>
@@ -662,9 +667,13 @@
 
       <h3 class="h-sect">Backup</h3>
       <p class="fineprint">
-        A backup is a file you keep, and it works whether or not Sync is on.
-        Restoring replaces this device’s history exactly, so turn Sync off
-        first. Your notes and your own cards are merged in rather than replaced.
+        A backup is a point-in-time file for this exact deck in this browser
+        profile, and it works whether or not Sync is on. Restoring replaces this
+        deck’s history exactly, so turn Sync off first. Notes and cards you wrote
+        are merged in rather than replaced. For an imported or locally created
+        deck, restore works only while that same local deck still exists here; it
+        cannot move review history to another browser or phone. Keep the original
+        imported file, or use Deck file below where it is offered, to move cards.
       </p>
       <p class="backup-state" id="backup-state"></p>
       <div class="btn-row">
@@ -683,9 +692,9 @@
            arrives a frame late. -->
       <h3 class="h-sect">Deck file</h3>
       <p class="fineprint">
-        A backup goes back into this deck on this device. A deck file is the
-        cards themselves, in the format keep club reads and writes, so it opens
-        on another device, in another browser, or in a text editor. It carries
+        A backup goes back into this exact deck in this browser profile. A deck
+        file is the cards themselves, in the format keep club reads and writes,
+        so it opens on another device, in another browser, or in a text editor. It carries
         no review history and no notes: course files never do. Importing one is
         not a restore. A file with your cards in it comes back as a second deck.
         A file that is only the deck as it came in is the same course, so
@@ -706,6 +715,8 @@
           choose Again, Hard, Good, or Easy, and U undoes the last review.</p>
         <p><a id="about-source" href="https://github.com/0xkkonrad/keepclub"
               target="_blank" rel="noopener noreferrer">View the code on GitHub</a></p>
+        <p><a id="about-study-guide" href="docs/studying/" target="_blank"
+              rel="noopener">How studying, scheduling, and progress work</a></p>
         <p class="about-build" id="build-line"></p>
       </div>
     </details>

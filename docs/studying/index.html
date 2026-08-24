@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How keep club schedules cards, grades answers, plans for an exam, and measures solid progress.">
+  <meta name="theme-color" content="#fffdf7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1e25" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://keepclub.app/docs/studying/">
+  <link rel="icon" href="../../icon-192.png">
+  <link rel="stylesheet" href="../docs.css">
+  <title>How studying works · keep club</title>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to the guide</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./" aria-label="keep club study guide home">
+        <img src="../tower.svg" alt="" width="36" height="36">
+        <span>keep club <small>study guide</small></span>
+      </a>
+      <nav class="top-links" aria-label="Documentation links">
+        <a href="https://github.com/0xkkonrad/keepclub">source</a>
+        <a href="../">create a course</a>
+        <a href="../../">open the app ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="side" aria-label="Study guide">
+      <strong>Start here</strong>
+      <a href="#daily-study">What to do each day</a>
+      <a href="#grades">Again, Hard, Good, Easy</a>
+      <a href="#learning">Learning and relearning</a>
+      <strong>Your plan</strong>
+      <a href="#daily-plan">Daily limits and extra cards</a>
+      <a href="#exam">Studying for an exam</a>
+      <a href="#progress">How progress is counted</a>
+      <strong>Extra help</strong>
+      <a href="#practice">Practice Ahead</a>
+      <a href="#slipping">Cards missed repeatedly</a>
+      <a href="#details">Small scheduling details</a>
+    </nav>
+
+    <main id="content">
+      <details class="mobile-nav">
+        <summary>Guides and this page</summary>
+        <nav aria-label="Mobile study guide">
+          <a href="#daily-study">What to do each day</a>
+          <a href="#grades">The four grades</a>
+          <a href="#learning">Learning and relearning</a>
+          <a href="#daily-plan">Daily plan</a>
+          <a href="#exam">Exam mode</a>
+          <a href="#progress">Progress</a>
+          <a href="#practice">Practice Ahead</a>
+          <a href="#slipping">Repeated misses</a>
+          <a href="#details">Scheduling details</a>
+          <a href="../">Create a course</a>
+        </nav>
+      </details>
+
+      <p class="eyebrow">For learners</p>
+      <h1>How studying works</h1>
+      <p class="lede">Answer before you reveal the card, grade what actually
+        happened, and let keep club choose when the card returns. Progress comes
+        from earning longer spacing, not from answering as many cards as possible.</p>
+      <div class="actions">
+        <a class="button" href="#grades">Choose the right grade</a>
+        <a class="button secondary" href="#exam">Understand exam mode</a>
+      </div>
+
+      <div class="principles" aria-label="Study principles">
+        <article>
+          <h2>Do today’s plan</h2>
+          <p>Study serves due cards, cards still being learned, and today’s new
+            cards. The repeat limit can leave a backlog; a section can also
+            offer clearly labelled extra new cards.</p>
+        </article>
+        <article>
+          <h2>Grade the answer</h2>
+          <p>Hard means correct but slow. If the answer was wrong or missing,
+            choose Again—even when it felt close.</p>
+        </article>
+        <article>
+          <h2>Trust the shown gap</h2>
+          <p>The day count behind a grade-button label is rolled once and then
+            recorded. Labels under a month show the exact days; month and year
+            labels are rounded summaries. Practice buttons show no interval.</p>
+        </article>
+      </div>
+
+      <section id="daily-study">
+        <h2>What to do each day</h2>
+        <ol class="steps">
+          <li><strong>Open Study.</strong> The main button contains the cards in
+            today’s plan. A repeat limit can leave due cards out of today’s
+            recorded Study.</li>
+          <li><strong>Try to recall first.</strong> Say or form the answer before
+            showing the back. Recognition after revealing is not recall.</li>
+          <li><strong>Choose the honest grade.</strong> Use the definitions below,
+            rather than choosing whichever return date looks convenient.</li>
+          <li><strong>Stop when the session finishes.</strong> When recorded Study
+            has nothing left to serve after today’s limits, keep club may offer
+            Practice Ahead. Practice is optional and does not alter the plan.</li>
+        </ol>
+        <p>You can undo the last recorded answer with the on-screen Undo control
+          or the <kbd>U</kbd> key. On a keyboard, Space reveals, and 1–4 choose
+          Again, Hard, Good, and Easy.</p>
+      </section>
+
+      <section id="grades">
+        <h2>Again, Hard, Good, and Easy</h2>
+        <p>Judge whether the answer was correct first. Speed and effort decide
+          between the three correct grades.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Grade</th><th>Use it when</th><th>What happens</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Again</strong></td>
+                <td>The answer was wrong, missing, or only became clear after you revealed it.</td>
+                <td>The card returns later in this session. If it had already left the learning loop, keep club retains roughly 40% of its ordinary spacing instead of erasing all prior learning.</td>
+              </tr>
+              <tr>
+                <td><strong>Hard</strong></td>
+                <td>The answer was correct, but slow or effortful.</td>
+                <td>After the learning loop, the shown gap is held rather than increased, and later gaps grow more cautiously.</td>
+              </tr>
+              <tr>
+                <td><strong>Good</strong></td>
+                <td>The answer was correct without serious difficulty.</td>
+                <td>In ordinary reviews, the gap grows based on how readily you have recalled the card before.</td>
+              </tr>
+              <tr>
+                <td><strong>Easy</strong></td>
+                <td>The answer was immediate and obvious.</td>
+                <td>In ordinary reviews, the gap normally grows more than Good, and later gaps can grow a little faster.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><strong>Hard is still a correct answer.</strong> If you were wrong but
+            close, use Again. Keep club counts Hard, Good, and Easy as successful
+            repeat answers.</p>
+          <p>Learning and relearning are different: Good and Easy can graduate
+            to the same retained gap, and Easy does not always mean a longer date
+            there. Grade the recall, not the label.</p>
+        </div>
+      </section>
+
+      <section id="learning">
+        <h2>Learning and relearning</h2>
+        <p>In recorded Study, new and missed cards use positions in the current session, not minute
+          timers. Again normally puts a card behind about four other cards; Hard
+          puts it behind about eight. A short queue can bring it back sooner.</p>
+        <ul>
+          <li>Again keeps a learning card in the session.</li>
+          <li>A new card can stay in the learning loop on Hard twice; its third
+            Hard moves it into ordinary reviews at about one day.</li>
+          <li>A missed review card enters relearning one step later. If it is not
+            missed again, one Hard keeps it in the loop and a second moves it back
+            to roughly the ordinary spacing retained when it was missed.</li>
+          <li>Another Again during relearning resets that step. From the reset,
+            three Hards are needed to leave the loop; Good or Easy can leave it
+            immediately at roughly the retained spacing.</li>
+          <li>Good normally moves a new card into ordinary reviews at about one day.</li>
+          <li>Easy normally moves a new card into ordinary reviews at about four days.</li>
+          <li>After Again on a card already in ordinary reviews, relearning starts from the
+            retained roughly 40% spacing rather than from nothing.</li>
+        </ul>
+        <p>A card already in ordinary reviews does <em>not</em> return within minutes after Hard.
+          It returns after the interval printed on its button.</p>
+      </section>
+
+      <section id="daily-plan">
+        <h2>Daily limits and extra cards</h2>
+        <p><strong>New cards in the daily plan</strong> controls the automatic
+          course-wide plan. It is not a universal hard maximum:</p>
+        <ul>
+          <li>Near a future exam, any non-zero number becomes a minimum that keep
+            club may raise. Setting it to zero always pauses unseen cards.</li>
+          <li>When unseen cards are enabled, if recorded Study has nothing left
+            to serve in a section after the daily limits, opening that section may
+            start up to 20 extra unseen cards. Due repeats can still be waiting
+            outside a spent repeat limit. The extra cards are real study: their
+            answers are recorded, and the app labels them before the first question.</li>
+        </ul>
+        <p><strong>Most cards to repeat in one day</strong> is a real limit for the
+          ordinary Study queue. Due repeats beyond it are left out of today’s
+          recorded Study and normally remain due; a temporary exam pull-forward
+          can expire when the exam date arrives. Opening a particular section
+          does not remove the course-wide limit.</p>
+      </section>
+
+      <section id="exam">
+        <h2>Studying for an exam</h2>
+        <p>A future exam date changes both introductions and reviews. It is an
+          exam-planning layer over the ordinary scheduler, not a separate measure
+          of what you know.</p>
+
+        <h3>New cards</h3>
+        <p>Keep club tries to introduce all unseen cards within the first 60% of
+          the remaining time, leaving roughly 40% for repeats. Your non-zero daily
+          number is the minimum; the app raises it when the deck otherwise would
+          not fit. Zero remains an absolute pause.</p>
+
+        <h3>Reviews</h3>
+        <p>For a review answered while an exam is active, the longest experienced
+          gap is about one fifth of the whole days left on that answer date:
+          answering with 30 days remaining gives a ceiling of about 6 days;
+          10 days gives about 2 days. The minimum is one day.</p>
+        <p>Turning on or changing an exam also projects existing schedules from
+          the date each current interval was originally earned—not from the day
+          you change the setting. That projection only pulls a review earlier. It
+          can make an older card due immediately, but it never postpones one.</p>
+        <p>The exam date and the dates printed on your grade buttons make cards
+          <em>due</em> earlier. Your daily repeat limit still decides how many the
+          ordinary Study queue actually serves, so a large backlog is not a
+          guarantee that every due card will be shown before the exam.</p>
+
+        <h3>Why a solid card can be due soon</h3>
+        <p>Keep club keeps two different facts:</p>
+        <ul>
+          <li><strong>ordinary spacing</strong>—the next interval calculated from
+            your answer without the exam pull-forward; and</li>
+          <li><strong>experienced due date</strong>—when exam mode asks you to see
+            the card sooner.</li>
+        </ul>
+        <p>A card can therefore have 30 days of ordinary spacing, remain solid,
+          and still be due in 6 days for the exam. Clearing the exam date exposes
+          the unchanged ordinary schedule again. If you explicitly grade that
+          early review Hard, however, the short gap remains: Hard is a real answer,
+          not merely an exam setting.</p>
+        <p>An exam date of today or in the past does not cap newly calculated
+          spacing. Normal spacing is active on and after the date. One exception
+          keeps a promise already shown: if you reveal a grade button before
+          midnight and press it after the exam day begins, the printed interval
+          is still the one recorded.</p>
+      </section>
+
+      <section id="progress">
+        <h2>How progress is counted</h2>
+        <p>Keep club uses one progress vocabulary:</p>
+        <ul>
+          <li><strong>Not started</strong>: no recorded answer yet.</li>
+          <li><strong>Learning</strong>: still in the session learning loop.</li>
+          <li><strong>Bedding in</strong>: reviewing, but ordinary spacing is under 21 days.</li>
+          <li><strong>Solid</strong>: the card is in ordinary reviews and its
+            ordinary spacing has reached at least 21 days.</li>
+        </ul>
+        <p><strong>Solid describes earned future spacing.</strong> It does not mean
+          you have already waited three weeks and recalled the card again. Exam
+          mode may make a solid card due sooner without removing its ordinary
+          spacing.</p>
+        <p>Learning takes priority over the spacing label. If a solid card is
+          answered Again, it temporarily counts as learning—even when the 40%
+          retained spacing is still at least 21 days. It can count as solid again
+          after it leaves relearning.</p>
+        <p>Progress is the percentage of cards that are solid. Merely seeing a
+          card receives no half-credit, so a fully seen deck can honestly show
+          0% solid while every card is still bedding in. Again on an ordinary review
+          card can lower its retained spacing below 21 days and reduce progress.</p>
+        <div class="callout">
+          <h3>Why an old 50% can become 0%</h3>
+          <p>Before the August 2026 repair, Home gave every seen-but-not-solid
+            card half-credit. Once every card had been seen, that display rule
+            manufactured exactly 50% even when none had earned three-week
+            spacing. It was a progress-display bug, not an expected learning
+            plateau and not standard Anki behavior.</p>
+          <p>The repair removes that fake half-credit; it does not delete your
+            answers. Any surviving ordinary spacing still counts. A course can
+            therefore move from the old 50% to an honest 0%, then climb as Good
+            and Easy answers earn longer spacing.</p>
+        </div>
+        <div class="callout warning">
+          <p><strong>Used keep club before the August 2026 progress repair?</strong>
+            Older exam scheduling could overwrite a longer interval. The app keeps
+            the evidence that survived; it does not invent three-week spacing from
+            repetition totals. Future Good and Easy reviews can rebuild solid progress.</p>
+        </div>
+      </section>
+
+      <section id="practice">
+        <h2>Practice Ahead</h2>
+        <p>Practice Ahead appears when recorded Study has nothing left to serve
+          after the daily limits. A spent repeat limit can therefore expose
+          Practice even while due cards remain. Practice includes every learning
+          and due card in its scope, then can add up to 20 of the soonest future
+          reviews and, when new cards are enabled, up to 20 unseen cards. A large
+          due backlog can therefore make a practice round longer than 40 cards.</p>
+        <p>Practice does not change due dates, intervals, solid progress, daily
+          totals, streaks, achievements, or whether an unseen card counts as
+          started. Every grade runs on a temporary copy. The opening message,
+          grade buttons, and completion screen all say when a session is practice.</p>
+        <p>Use it for optional rehearsal. If you want an answer to influence the
+          scheduler, wait until the card appears in ordinary Study.</p>
+        <p>Practice also forgets its temporary learning steps. Again can keep
+          returning a card, and Hard on an unseen practice card does not use the
+          three-Hard escape described for recorded Study. Leave the round when
+          repeating it is no longer useful.</p>
+      </section>
+
+      <section id="slipping">
+        <h2>Cards missed repeatedly</h2>
+        <p>A card is marked <strong>missed 3+ times</strong> after three Again
+          answers on ordinary reviews. This is a cumulative history flag, not
+          a claim that the card is currently weak. It remains after later Good or
+          Easy answers and after the card becomes solid.</p>
+        <p>Use the filter as a reading list: check the source, rewrite an ambiguous
+          card, or add a note when the underlying idea still causes trouble.</p>
+      </section>
+
+      <section id="details">
+        <h2>Small scheduling details</h2>
+
+        <h3>Why intervals vary slightly</h3>
+        <p>Intervals of at least three days are spread by about 5%. The possible
+          range extends at least one day in each direction, although the random
+          roll can still land on the original day. This prevents many cards from
+          piling onto one date. The exact day count behind the button label is
+          rolled once and recorded, even if you reload or cross midnight before
+          pressing it; month and year labels only summarize that count. Hard on an
+          ordinary review is not spread, because repeatedly holding a card should
+          not random-walk. A Hard that finishes relearning can still receive the
+          normal small spread.</p>
+
+        <h3>Is this the standard Anki scheduler?</h3>
+        <p>No. Keep club currently uses a simplified SM-2-inspired scheduler with
+          its own Hard, Again, session-learning, and exam rules. It does not use
+          modern Anki’s FSRS scheduler. Importing an Anki deck brings cards and
+          media, not its scheduling history; imported cards start new.</p>
+
+        <h3>Limits</h3>
+        <p>Keep club bounds how quickly gaps can grow, and the longest ordinary
+          interval is 400 days. These are global rules rather than deck options.</p>
+
+        <h3>Where progress is kept</h3>
+        <p>Progress starts in this browser profile on this device. A different
+          browser, private profile, or cleared site-data store is a separate place.</p>
+        <p>Built-in courses can use account-free Sync. One Sync key is permission
+          to the synced progress, notes, and cards you write in every built-in
+          course using that key, so protect it like a password.</p>
+        <p>Imported and locally created decks do not Sync. Their backups restore
+          only into that exact local deck while it still exists in this browser
+          profile; a backup cannot move imported-deck review history to another
+          browser or phone. Keep the original <code>.apkg</code> or course file to
+          recreate the cards. The controls are under
+          <strong>Settings → Keeping your progress</strong>.</p>
+      </section>
+
+      <footer class="footer">
+        <p>This guide describes the scheduler shipped with keep club. If the app
+          and this page disagree, please
+          <a href="https://github.com/0xkkonrad/keepclub/issues">report it</a>.
+          Course creators have a separate <a href="../">format guide</a>.</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

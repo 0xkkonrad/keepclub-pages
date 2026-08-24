@@ -173,9 +173,10 @@
       priority,
     })),
 
-    // "Solid" is the product promise: the next scheduled review is at least
-    // three weeks away. Counts and percentages are separate because a small
-    // deck can be mastered without ever reaching a large absolute threshold.
+    // "Solid" means the answer earned at least three weeks of ordinary future
+    // spacing. Exam mode may still pull the experienced due date earlier.
+    // Counts and percentages are separate because a small deck can be solid
+    // without ever reaching a large absolute threshold.
     ...[
       [10, SHARE.PROMPT, 66],
       [25, SHARE.PROMPT, 68],
@@ -188,7 +189,7 @@
       scope: 'club',
       family: 'memories-kept',
       title: `${cards} memories kept`,
-      description: `${cards} cards are still there after three weeks`,
+      description: `${cards} cards have earned three-week spacing`,
       rule: metric('solidCards', { gte: cards }),
       share,
       priority,
@@ -268,7 +269,7 @@
       scope: 'club',
       family: 'club-life',
       title: 'lunch break',
-      description: 'kept a memory over lunch',
+      description: 'studied over lunch',
       rule: all(
         metric('hour', { gte: 12 }),
         metric('hour', { lt: 14 }),
@@ -347,7 +348,7 @@
       family: 'recovery',
       art: 'worm',
       title: 'unstuck',
-      description: 'a card that kept slipping is solid again',
+      description: 'a repeatedly missed card has worked back to a week',
       rule: metric('tamed', { eq: true }),
       share: SHARE.AVAILABLE,
       priority: 58,
@@ -382,8 +383,8 @@
       id: `anki-keeper-${reviews}`,
       scope: 'course',
       family: 'anki-keeper',
-      title: `${reviews.toLocaleString('en-US')} imported reviews`,
-      description: `kept ${reviews.toLocaleString('en-US')} reviews local`,
+      title: `${reviews.toLocaleString('en-US')} local-deck answers`,
+      description: `recorded ${reviews.toLocaleString('en-US')} answers in a local deck`,
       rule: all(
         metric('imported', { eq: true }),
         metric('importedReviews', { gte: reviews }),

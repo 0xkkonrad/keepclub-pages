@@ -1,3 +1,4 @@
+/* keepclub-docs-v1: service-worker identity marker */
 @font-face {
   font-family: "DM Mono";
   src: url("../fonts/dm-mono-400.woff2") format("woff2");
@@ -394,7 +395,13 @@ tr:last-child td {
 }
 
 @media (max-width: 760px) {
-  .top-links a:first-child {
+  html {
+    /* The sticky header can wrap at the narrowest supported width. Keep
+       in-page headings clear when a learner follows a menu/deep link. */
+    scroll-padding-top: 7.5rem;
+  }
+
+  .top-links a:not(:last-child) {
     display: none;
   }
 
@@ -429,6 +436,13 @@ tr:last-child td {
     padding: 0 1rem 1rem;
     gap: .45rem;
     font-size: .86rem;
+  }
+
+  /* A display value on the child overrides the browser's built-in closed
+     <details> hiding rule. Restate it so the menu is a real disclosure rather
+     than links invisibly laid over the first page paragraphs. */
+  .mobile-nav:not([open]) nav {
+    display: none;
   }
 
   .principles {

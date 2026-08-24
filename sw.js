@@ -2,7 +2,7 @@
  *
  * The shell and the card data are precached so the app opens with no network at
  * all. Diagrams are a few megabytes, so they are cached as they are first seen
- * rather than forced down on install — with a button in Progress → Offline to
+ * rather than forced down on install — with a button in Settings → This device to
  * pull the lot deliberately before you lose signal.
  *
  * One cache for the shell, one per course. They used to share a single cache
@@ -15,7 +15,7 @@
  * BUILD is stamped by scripts/deploy-to-keepclub.sh from the content actually
  * shipped: without that, a cache-first shell never updates.
  */
-const BUILD = { shell: '4efaad0593', courses: { 'day-skipper': '0ded6410ee', 'competent-crew': '805d4f0dd9', 'git-101': '9e570c7079', 'toki-pona': '8db6ef1cad' } };
+const BUILD = { shell: '655ca89b4b', courses: { 'day-skipper': '64a423aeeb', 'competent-crew': 'e799bca207', 'git-101': '287eaabbec', 'toki-pona': '8db6ef1cad' } };
 const SHELL_V = 'munin-shell-' + BUILD.shell;
 const courseV = (id) => 'munin-course-' + id + '-' + (BUILD.courses[id] || 'dev');
 const SCOPE = new URL('./', self.registration.scope).pathname;
@@ -104,6 +104,55 @@ async function appPageOk(r) {
   } catch (e) { return false; }
 }
 
+/** Public documentation is cached separately from navigation fallback. An HTML
+ * login portal is not documentation merely because it returned 200. */
+async function docsResponseOk(r, pathname) {
+  const expected = typeFor(pathname);
+  if (expected !== 'text/html') {
+    // Headerless 200s are tolerated for the app shell because some simple
+    // static servers omit MIME metadata. Public docs assets are a stricter
+    // boundary: otherwise a headerless Wi-Fi sign-in page can become CSS,
+    // schema JSON, or the tower image in a required offline generation.
+    if (!(r?.headers.get('content-type') || '').trim() || !ok(r, expected)) return false;
+    try {
+      const body = await r.clone().text();
+      if (String(pathname).endsWith('/docs.css')) {
+        return /keepclub-docs-v1/.test(body) && /\.mobile-nav\b/.test(body)
+          && /--paper\s*:/.test(body);
+      }
+      if (String(pathname).endsWith('/tower.svg')) {
+        return /<svg\b/i.test(body)
+          && /data-keepclub-doc=["']tower-v1["']/.test(body)
+          && /viewBox=["']0 0 32 32["']/.test(body);
+      }
+      if (String(pathname).endsWith('/course-v2.schema.json')) {
+        const schema = JSON.parse(body);
+        return schema?.$id === 'https://docs.keepclub.app/schema/course-v2.schema.json'
+          && schema?.properties?.schemaVersion?.const === 2
+          && schema?.required?.includes('cards');
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+  if (!ok(r, expected)) return false;
+  try {
+    const html = await r.clone().text();
+    const canonical = /<link\b[^>]*\brel=["']canonical["'][^>]*\bhref=["']([^"']+)/i
+      .exec(html)?.[1];
+    const relative = String(pathname).startsWith(SCOPE)
+      ? String(pathname).slice(SCOPE.length)
+      : String(pathname).replace(/^\/+/, '');
+    const route = '/' + relative
+      + (!relative.endsWith('/') && !/\.[a-z0-9]+$/i.test(relative) ? '/' : '');
+    const declared = canonical ? new URL(canonical, 'https://keepclub.app') : null;
+    return /<main\b/i.test(html)
+      && /keep club/i.test(html)
+      && /docs\.css/i.test(html)
+      && declared?.origin === 'https://keepclub.app'
+      && declared.pathname === route;
+  } catch (e) { return false; }
+}
+
 async function cachedAppPage() {
   for (const key of ['./', 'index.html']) {
     const hit = await caches.match(key, { ignoreSearch: true });
@@ -163,6 +212,15 @@ const SHELL = [
   'lib/validate.js',
   'lib/vendor/fzstd.js',
   'manifest.webmanifest',
+  // Help must work in the same offline places as Study. Directory URLs are
+  // listed explicitly so an offline navigation receives the real guide, never
+  // the cached application document.
+  'docs/',
+  'docs/studying/',
+  'docs/reference/errors/',
+  'docs/docs.css',
+  'docs/tower.svg',
+  'docs/schema/course-v2.schema.json',
   'fonts/dm-mono-400.woff2',
   'fonts/architects-daughter.woff2',
   'fonts/dm-mono-500.woff2',
@@ -187,6 +245,8 @@ async function cacheComplete(name, files, prefix = '') {
   for (const file of files) {
     const hit = await cache.match(prefix + file);
     if (!ok(hit, typeFor(file))) return false;
+    if (!prefix && file.startsWith('docs/')
+        && !(await docsResponseOk(hit, file))) return false;
     if (!prefix && (file === './' || file === 'index.html')
         && !(await appPageOk(hit))) return false;
   }
@@ -196,29 +256,40 @@ async function cacheComplete(name, files, prefix = '') {
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const existed = (await caches.keys()).includes(SHELL_V);
-    const shell = await caches.open(SHELL_V);
-    // One file at a time, because addAll is all-or-nothing over two dozen of
-    // them: a single 404 — a partial rsync, a CDN that has not caught up — used
-    // to reject the whole install, so skipWaiting() never ran and a first-ever
-    // registration was thrown away. The app then had no offline at all, and no
-    // way to say so, while Progress went on promising the cards work offline
-    // once you have opened it. A missing font is not a reason to have no shell,
-    // exactly as one bad course is not a reason to have no app (below).
-    await Promise.all(SHELL.map((f) => shell.add(f)
-      .catch((e) => console.warn('munin: shell ' + f + ' not cached', e))));
-    // caches.open() made the cache before a byte was fetched. If nothing at all
-    // landed — installed with no network, or a deploy that is simply not there
-    // — an empty cache under the CURRENT name is a shell that answers nothing
-    // and that activate will never sweep, because current is exactly what it
-    // keeps. Drop it and let the next install start from nothing instead.
-    if (!(await cacheComplete(SHELL_V, REQUIRED_SHELL))) {
-      if (!existed) await caches.delete(SHELL_V);
-      throw new Error('munin: required offline shell is incomplete');
+    if (existed) {
+      // A worker-only release deliberately keeps the same content stamp. Never
+      // refill that live cache in place: one portal/503 would overwrite the
+      // active generation before validation rejected the installing worker.
+      if (!(await cacheComplete(SHELL_V, REQUIRED_SHELL))) {
+        throw new Error('munin: existing offline shell is incomplete');
+      }
+    } else {
+      const shell = await caches.open(SHELL_V);
+      // One file at a time, because addAll is all-or-nothing over two dozen of
+      // them: a single 404 — a partial rsync, a CDN that has not caught up — used
+      // to reject the whole install, so skipWaiting() never ran and a first-ever
+      // registration was thrown away. The app then had no offline at all, and no
+      // way to say so. A missing font is not a reason to have no shell.
+      await Promise.all(SHELL.map((f) => shell.add(f)
+        .catch((e) => console.warn('munin: shell ' + f + ' not cached', e))));
+      // caches.open() made the cache before a byte was fetched. Drop an
+      // incomplete new generation so activation can retain the old complete one.
+      if (!(await cacheComplete(SHELL_V, REQUIRED_SHELL))) {
+        await caches.delete(SHELL_V);
+        throw new Error('munin: required offline shell is incomplete');
+      }
     }
     // Each course into its own cache, and one course that will not install is
     // not a reason for the app to have no offline shell at all.
     for (const id of (await readCourses()) || []) {
-      const cache = await caches.open(courseV(id));
+      const courseName = courseV(id);
+      const courseExisted = (await caches.keys()).includes(courseName);
+      if (courseExisted) {
+        // As with the shell, an unchanged content stamp means this is the live
+        // generation. Activation will keep it only if it remains complete.
+        continue;
+      }
+      const cache = await caches.open(courseName);
       let healthy = true;
       for (const f of COURSE_FILES) {
         const path = 'courses/' + id + '/' + f;
@@ -244,8 +315,8 @@ self.addEventListener('install', (e) => {
         }
       }
       if (!healthy
-          || !(await cacheComplete(courseV(id), REQUIRED_COURSE, 'courses/' + id + '/'))) {
-        await caches.delete(courseV(id));
+          || !(await cacheComplete(courseName, REQUIRED_COURSE, 'courses/' + id + '/'))) {
+        await caches.delete(courseName);
         console.warn('munin: required files for ' + id + ' are incomplete; keeping any older cache');
       }
     }
@@ -453,11 +524,31 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // Public creator docs share the deployment but are not the app shell. Leave
-  // them to the browser/network; an offline docs request must not unexpectedly
-  // open the study app from cached index.html.
-  if (url.pathname === SCOPE + 'docs'
-      || url.pathname.startsWith(SCOPE + 'docs/')) return;
+  // Public learner and creator docs are part of the offline help shell, but a
+  // docs navigation is never interchangeable with the app document. Cache the
+  // real page under its directory URL and use only that as its fallback.
+  const docsRoot = SCOPE + 'docs';
+  if (url.pathname === docsRoot || url.pathname.startsWith(docsRoot + '/')) {
+    const relative = url.pathname.slice(SCOPE.length);
+    const cacheKey = url.pathname === docsRoot
+      ? 'docs/'
+      : (!url.pathname.endsWith('/') && !/\.[a-z0-9]+$/i.test(url.pathname)
+        ? relative + '/'
+        : relative);
+    e.respondWith((async () => {
+      const cache = await caches.open(SHELL_V);
+      const hit = await cache.match(cacheKey, { ignoreSearch: true });
+      const net = fetch(req).then(async (r) => {
+        if (await docsResponseOk(r, url.pathname)) {
+          await cache.put(cacheKey, r.clone());
+          return r;
+        }
+        return hit || r;
+      }).catch(() => hit || Response.error());
+      return hit || net;
+    })());
+    return;
+  }
 
   // Card data and the clip map: network first so a rebuilt deck or a newly
   // attached clip arrives, cache as the fallback.

@@ -1194,13 +1194,13 @@ function grade(id, g, ivl, practising, naturalIvl, uncappedIvl, examDate) {
   return outcome;
 }
 
-/* One vocabulary everywhere. The Progress screen used to say "known well" for
- * the same thing the study chip called "mature". */
+/* One learner vocabulary everywhere. Internal records still call the bucket
+ * "mature"; every visible surface calls the earned state "solid". */
 const STATE_WORDS = {
-  new: 'not seen before',
-  learning: 'still learning',
+  new: 'not started',
+  learning: 'learning',
   young: 'bedding in',
-  mature: 'known well',
+  mature: 'solid',
 };
 
 function stateOf(id) {
@@ -1738,7 +1738,7 @@ function shareStat(moment) {
     case 'activity':
       return { stat: String(n(p.target || p.value)), label: 'answers at the club' };
     case 'anki-keeper':
-      return { stat: String(n(p.target || p.value)), label: 'imported reviews kept local' };
+      return { stat: String(n(p.target || p.value)), label: 'local-deck answers' };
     case 'monthly-recap':
       return { stat: String(n(p.studyDays)), label: `study days in ${moment.label || 'the month'}` };
     case 'membership':
@@ -1768,7 +1768,7 @@ const FAMILY_LABEL = Object.freeze({
   exploration: 'exploration',
   mastery: 'course milestone',
   recovery: 'recovery',
-  'anki-keeper': 'imported reviews',
+  'anki-keeper': 'local-deck answers',
   comeback: 'comeback',
   'monthly-recap': 'monthly recap',
   membership: 'club membership',
@@ -2423,8 +2423,8 @@ function goTab(name) {
 
 /* ── home ── */
 
-/** Cards that have gone wrong enough times that answering them again is not the
- *  answer — you need to go and read the material. */
+/** Cards with three or more lifetime misses on established reviews. This is a
+ * history flag: later recovery deliberately does not erase it. */
 function leeches() {
   return DECK.cards.filter((c) => {
     const r = state.recs[c.cardId];
@@ -2500,7 +2500,7 @@ function renderExamBanner(c) {
       ? `<b>Exam ${when}.</b> At ${pace} new cards a day, the ${c.fresh} you have not seen take ${introDays} days. You will not get through the deck — raise the daily number in Settings, or accept that you will skip some sections.`
       : `<b>Exam ${when}.</b> ${c.fresh
           ? `${pace} new cards a day gets you through the ${c.fresh} you have not seen in time.`
-          : 'You have seen every card at least once.'} Every card comes back at least once before you sit it.`) + amend;
+          : 'You have seen every card at least once.'} Review dates are pulled forward before the exam; your daily repeat limit still applies.`) + amend;
   return true;
 }
 
@@ -2510,7 +2510,7 @@ function renderLeechRow() {
   if (!l.length) { el.hidden = true; return; }
   el.hidden = false;
   el.querySelector('span').textContent =
-    `${l.length} card${l.length === 1 ? '' : 's'} keep${l.length === 1 ? 's' : ''} slipping`;
+    `${l.length} card${l.length === 1 ? '' : 's'} missed 3+ times`;
 }
 
 /* ── install ── */
@@ -2605,8 +2605,8 @@ function renderHome() {
     $('#today-note').textContent = pace === 0 && c.fresh
       ? `New cards are switched off, so ${c.fresh} of ${DECK.cards.length} will stay unseen. Raise the daily number in Settings.`
       : c.fresh
-        ? `Today's ${pace} are done and nothing is due. You can practise ${batch} now: nothing you answer counts, and nothing moves. ${c.fresh} cards left to see.`
-        : 'Nothing is due. Practice pulls forward the cards scheduled soonest and leaves the schedule exactly where it is — worth it the week before the exam, not before.';
+        ? `Today's ${pace} are done and recorded Study has nothing left after today's limits. You can practise ${batch} now: nothing you answer counts, and nothing moves. ${c.fresh} cards left to see.`
+        : 'Recorded Study has nothing left after today’s limits. Practice includes any due cards outside the repeat limit, then pulls forward the cards scheduled soonest, without moving the schedule.';
   }
 
   const today = countStudiedToday();
@@ -2673,7 +2673,7 @@ function renderHome() {
       // A real non-zero fraction must not be announced as zero. Keep whole
       // milestone points everywhere else, but give the first solid card a
       // visible sliver and an honest accessible name even in a huge section.
-      const progress = progressPercent(sc.mature, s.cardCount, 'known well');
+      const progress = progressPercent(sc.mature, s.cardCount, 'solid');
       const meterPct = pct || (sc.mature > 0
         ? Math.min(100, (sc.mature / s.cardCount) * 100)
         : 0);
@@ -3983,17 +3983,17 @@ function sayWhatWentMissing() {
   }
   if (deleted) {
     said.push(deleted === 1
-      ? 'A card you had answered was deleted on another device, so its history went with it.'
-      : `${deleted} cards you had answered were deleted on another device, so their history `
+      ? 'A card you had answered was deleted in another synced browser, so its history went with it.'
+      : `${deleted} cards you had answered were deleted in another synced browser, so their history `
         + 'went with them.');
   }
   // Not the same sentence: this device is where the deleting happened, and the
   // file is what tried to put the answering back.
   if (putBack) {
     said.push(putBack === 1
-      ? 'A card in that backup is deleted on this device, so what you had answered of it '
+      ? 'A card in that backup is deleted in this browser profile, so what you had answered of it '
         + 'did not come back.'
-      : `${putBack} cards in that backup are deleted on this device, so what you had `
+      : `${putBack} cards in that backup are deleted in this browser profile, so what you had `
         + 'answered of them did not come back.');
   }
   // Last, and in the words the write itself produced: everything above is about
@@ -4567,7 +4567,7 @@ function startSession(sectionKey, opts) {
   // unseen cards are the deck being introduced early, cards pulled forward from
   // a later day are practice. Said before the first question rather than found
   // out afterwards from a due date that did not move.
-  if (session.ahead) toast('Practice: these are not due yet, so nothing you press moves them.');
+  if (session.ahead) toast('Practice: nothing you press counts or moves the schedule, even when a card is already due.');
   else if (extra) toast('These are extra cards, on top of today’s plan.');
   settleDock(false);
   go('study');
@@ -4963,6 +4963,11 @@ function finish() {
   const revRoom = Math.max(0, state.settings.maxRev - state.revDone);
   const newRoom = Math.max(0, newBudget() - state.newDone);
   const left = Math.min(c.due, revRoom) + c.learning + Math.min(c.fresh, newRoom);
+  // `left` is the recorded queue, not every card that is due. Once the repeat
+  // limit is spent it can honestly be zero while `c.due` is still positive.
+  // Do not send that state through nextDueLine(): that helper deliberately
+  // looks only for future reviews and would tell the learner nothing is due.
+  const cappedDue = !session.ahead && c.due > 0 && revRoom === 0;
 
   $('#done-title').textContent = session.section
     ? scopeName(session.section) || 'Section done'
@@ -4973,7 +4978,9 @@ function finish() {
     ? 'That was practice. The deck is where you left it.'
     : left > 0
       ? `${left} more card${left === 1 ? '' : 's'} are ready across the deck.`
-      : nextDueLine();
+      : cappedDue
+        ? `Recorded Study is finished for today. ${c.due} due card${c.due === 1 ? '' : 's'} ${c.due === 1 ? 'remains' : 'remain'} outside today’s repeat limit. Back to sections lets you practise ${c.due === 1 ? 'it' : 'them'} without moving the schedule.`
+        : nextDueLine();
   $('#done-more').hidden = left === 0;
 
   // The section's own drawing with four pen-strokes flying off it, instead
@@ -5283,7 +5290,7 @@ function markTerms(root, terms) {
 }
 
 function scopeName(sk) {
-  if (sk === LEECH_FILTER) return 'the cards that keep slipping';
+  if (sk === LEECH_FILTER) return 'cards missed three or more times';
   if (isGroup(sk)) {
     const g = groupOf.get(sk.slice(2));
     return g ? g.title : sk;
@@ -5591,7 +5598,7 @@ function renderBrowse() {
     // asked you to know which section a question lives in before it could help.
     const opt = (v, label) => `<option value="${escapeHtml(v)}">${escapeHtml(label)}</option>`;
     sel.innerHTML = '<option value="">All sections</option>' +
-      (wantLeech ? `<option value="${LEECH_FILTER}">★ Keeps slipping (${n(lc)})</option>` : '') +
+      (wantLeech ? `<option value="${LEECH_FILTER}">★ Missed 3+ times (${n(lc)})</option>` : '') +
       [...groupOf.values()].map((g) =>
         `<optgroup label="${escapeHtml(g.title || 'Sections')}">`
         + (g.title
@@ -5640,7 +5647,7 @@ function renderBrowse() {
     count = terms.length
       ? `Nothing matches “${raw}”${sk ? ` in ${scopeName(sk)}` : ''}.`
       : (sk === LEECH_FILTER
-        ? 'No cards are slipping yet.'
+        ? 'No cards have been missed three or more times.'
         : `No cards in ${scopeName(sk)}.`);
   } else if (terms.length && sk) {
     count = `${n(hits.length)} of the ${plural(scope, 'card')} in ${scopeName(sk)}`;
@@ -5803,7 +5810,7 @@ function renderBackupState() {
   const el = $('#backup-state');
   if (!el) return;
   if (saveBlocked) {
-    el.textContent = 'Progress is not saving on this device. Export a backup now; no more cards will be graded until storage works again.';
+    el.textContent = 'Progress is not saving in this browser profile. Export a backup now; no more cards will be graded until storage works again.';
     return;
   }
   const withHistory = Object.keys(state.recs).length;
@@ -6189,16 +6196,17 @@ function renderSyncState() {
     // the cards layer — never the deck. Saying it moves one would be the app
     // offering a way out that does not exist, on the screen somebody reads
     // before deciding they can remove the deck.
-    line.textContent = 'Built-in courses can sync your progress, your notes and the cards '
-      + 'you write. A deck you import or write stays on this device: the backup file below '
-      + 'holds what you have answered and the cards you wrote, and no file holds the deck.';
+    line.textContent = 'Built-in courses can sync your progress, notes, and the cards '
+      + 'you write. A deck you import or create, and its review history, stay in this '
+      + 'browser profile. Its backup restores only into this exact local deck while it '
+      + 'still exists; keep the original imported file or use Deck file below where offered.';
     keyEl.hidden = true;
     acts.innerHTML = '';
     return;
   }
 
   if (!s.on) {
-    line.textContent = 'Sync is off. Your progress is on this device only.';
+    line.textContent = 'Sync is off. Your progress is in this browser profile only.';
     keyEl.hidden = true;
     acts.innerHTML = '<button class="ghost" data-sync="new">Turn on sync</button>'
       + '<button class="ghost" data-sync="join">Use a key from another device</button>';
@@ -6303,7 +6311,7 @@ function renderStats() {
   // the deck has handed a card back. Club streak stays first.
   const tiles = [
     [club.clubStreak, 'club streak <small>— across every course</small>'],
-    [buckets.mature, 'solid <small>— still there in three weeks</small>'],
+    [buckets.mature, 'solid <small>— spaced at least three weeks</small>'],
     [buckets.young + buckets.learning, 'seen, not solid yet'],
     [buckets.new, 'not started'],
   ];
@@ -6362,7 +6370,7 @@ function renderStats() {
       return `<li>
       <span>${escapeHtml(s.title)}</span>
       <span class="m-n">${b.mature} solid · ${b.young + b.learning} seen · ${s.cardCount} total</span>
-      <span class="m-bar" role="img" aria-label="${b.mature} known well, ${b.young} bedding in, ${b.learning} learning, ${b.new} not started">
+      <span class="m-bar" role="img" aria-label="${b.mature} solid, ${b.young} bedding in, ${b.learning} learning, ${b.new} not started">
         <i class="m-mature" style="width:${p(b.mature)}%"></i>
         <i class="m-young" style="width:${p(b.young)}%"></i>
         <i class="m-learn" style="width:${p(b.learning)}%"></i>
@@ -7444,7 +7452,7 @@ function wire() {
 
     if (what === 'new') {
       if (!DSSync.turnOn()) {
-        toast('Sync could not be turned on because device storage is blocked.', true);
+        toast('Sync could not be turned on because browser storage is blocked.', true);
         return;
       }
       $('#sync-join').hidden = true;
@@ -7470,14 +7478,14 @@ function wire() {
       return;
     }
     if (what === 'off') {
-      if (!confirm('Turn off sync on this device?\n\nProgress stays here, and stays on the server for your other devices. Keep the key if you might turn it back on.')) return;
+      if (!confirm('Turn off Sync in this browser profile?\n\nProgress stays here, and stays on the server for your other browsers. Keep the key if you might turn it back on.')) return;
       if (!DSSync.turnOff()) {
-        toast('Sync could not be turned off because device storage is blocked.', true);
+        toast('Sync could not be turned off because browser storage is blocked.', true);
         return;
       }
       $('#sync-join').hidden = true;
       renderSyncState();
-      toast('Sync is off on this device.');
+      toast('Sync is off in this browser profile.');
     }
   });
 
@@ -7489,9 +7497,9 @@ function wire() {
       toast(`That is not a sync key — they are ${DSSync.KEY_CHARS} letters and digits.`);
       return;
     }
-    if (!confirm('Join the deck this key belongs to?\n\nThe progress on this device and the progress on that one are merged into a single deck — nothing is thrown away.')) return;
+    if (!confirm('Use this Sync key?\n\nProgress in this browser profile and progress already stored under the key are merged for this built-in course — nothing is thrown away. The key also grants access to every built-in course using it.')) return;
     if (!DSSync.turnOn(key)) {
-      toast('Sync could not be turned on because device storage is blocked.', true);
+      toast('Sync could not be turned on because browser storage is blocked.', true);
       return;
     }
     e.target.hidden = true;
@@ -7734,7 +7742,7 @@ function wire() {
       ? `Restore ${plural(known.length, 'card')} of history${when}?`
       : `Restore the notes in this backup${when}? It holds no card history for this deck.`;
     const warn = mine
-      ? `\n\nThis ${known.length ? 'replaces' : 'erases'} the ${mine} cards of history already on this device.`
+      ? `\n\nThis ${known.length ? 'replaces' : 'erases'} the ${mine} cards of history already in this browser profile.`
       : '';
     // What happens to the notes is said out loud, because it is not what the
     // rest of the sentence implies: everything else in this document is being
@@ -7788,7 +7796,7 @@ function wire() {
       publishStateReset();
     } catch (e) {
       putDropsBack();
-      toast('The backup could not be restored because device storage is blocked.', true);
+      toast('The backup could not be restored because browser storage is blocked.', true);
       return;
     }
     state = incoming;
@@ -7932,7 +7940,7 @@ function wire() {
 
   $('#reset-btn').addEventListener('click', () => {
     if (globalThis.DSSync && DSSync.enabled()) {
-      toast('Copy your Sync key and turn Sync off before erasing this device, or the shared copy would return.', true);
+      toast('Copy your Sync key and turn Sync off before erasing this browser profile, or the shared copy would return.', true);
       return;
     }
     const keptNotes = liveNotes().length;
@@ -7953,7 +7961,7 @@ function wire() {
     // One thing, not one kind of thing: "your 1 note are kept" was what
     // counting the kinds produced, and it was what the old sentence said.
     const keptIs = keptNotes + keptCards === 1 ? 'is' : 'are';
-    if (!confirm('Erase all review history on this device? Export a backup first if you might want it back.'
+    if (!confirm('Erase all review history in this browser profile? Export a backup first if you might want it back.'
       + (kept.length ? `\n\n${keptSays} on this deck ${keptIs} kept.` : ''))) return;
     // The notes come across to the fresh state on purpose. This button offers
     // to erase review history, and it says so in the sentence above; taking
@@ -7964,7 +7972,7 @@ function wire() {
     try {
       publishStateReset();
     } catch (e) {
-      toast('Progress could not be erased because device storage is blocked.', true);
+      toast('Progress could not be erased because browser storage is blocked.', true);
       return;
     }
     state = Object.assign(freshState(), { notes });
@@ -8185,7 +8193,7 @@ function renderOffline() {
       // failed registration — was told the cards already worked offline.
       note.textContent = `This browser has not stored the app, so the cards and the `
         + `${many ? 'diagrams' : 'diagram'} need a signal. Open it once more with one — `
-        + `a private window will never keep it. Your progress is on the device either way.`;
+        + `a private window will never keep it. Your progress remains in this browser profile.`;
       btn.hidden = false;
       btn.disabled = true;
       btn.textContent = 'Nothing to save into yet';

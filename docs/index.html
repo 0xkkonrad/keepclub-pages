@@ -19,8 +19,9 @@
         <img src="tower.svg" alt="" width="36" height="36">
         <span>keep club <small>course docs</small></span>
       </a>
-      <nav class="top-links" aria-label="External">
+      <nav class="top-links" aria-label="Documentation links">
         <a href="https://github.com/0xkkonrad/keepclub">source</a>
+        <a href="studying/">how studying works</a>
         <a href="https://keepclub.app/">open the app ↗</a>
       </nav>
     </div>
@@ -28,6 +29,8 @@
 
   <div class="layout">
     <nav class="side" aria-label="Documentation">
+      <strong>Learners</strong>
+      <a href="studying/">How studying works</a>
       <strong>Start here</strong>
       <a href="#quick-start">Smallest course</a>
       <a href="#optional-by-default">What is required</a>
@@ -48,14 +51,22 @@
 
     <main id="content">
       <details class="mobile-nav">
-        <summary>On this page</summary>
+        <summary>Guides and this page</summary>
         <nav aria-label="Mobile documentation">
+          <a href="studying/">Learner study guide</a>
           <a href="#quick-start">Smallest course</a>
+          <a href="#optional-by-default">What is required</a>
           <a href="#cards">Card examples</a>
           <a href="#markdown">Markdown</a>
+          <a href="#organization">Sections, groups, tags</a>
           <a href="#media">Media and packages</a>
+          <a href="#validation">Validation</a>
           <a href="#fields">Field tables</a>
+          <a href="#identity">IDs and progress</a>
+          <a href="#tooling">Editors and generators</a>
+          <a href="#evolution">Extensions and evolution</a>
           <a href="reference/errors/">Diagnostic codes</a>
+          <a href="schema/course-v2.schema.json">JSON Schema ↧</a>
         </nav>
       </details>
 
@@ -433,8 +444,9 @@ cards:
           <li>Scheduling, streaks, due dates, and learner history never belong
             in a course artifact.</li>
         </ul>
-        <p>keep club writes this format as well as reading it. Progress → deck
-          file exports the open deck as a <code>.keep.yml</code>, checked
+        <p>keep club writes this format as well as reading it. Settings →
+          Keeping your progress → Deck file exports the open deck as a
+          <code>.keep.yml</code>, checked
           against this contract before the download starts. What comes out is a
           course file and nothing more: no review history, no notes, and no
           record of hidden cards. A deck stored as sanitized HTML — a built-in

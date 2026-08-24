@@ -1387,6 +1387,7 @@ mark {
    a tile whose whole content is "n/a — not enough data yet" is an apology in a
    grid, and the other one said the same thing from the other side. */
 .stat-say { margin: 12px 0 0; font-size: .76rem; color: var(--muted); }
+.stat-help { margin: 9px 0 0; font-size: .76rem; }
 
 .moment-card {
   position: relative; overflow: hidden;

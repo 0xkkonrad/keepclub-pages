@@ -305,10 +305,10 @@ export function openImporter() {
     body.innerHTML = `
       ${draggable ? `<div class="imp-drop" id="imp-drop">
         <b>drop a course here</b>
-        <p>.keep.yml, .keep or .apkg · stays on this device</p>
+        <p>.keep.yml, .keep or .apkg · stays in this browser profile</p>
       </div>` : ''}
       <button type="button" class="imp-file" id="imp-file">choose a course file${
-  draggable ? '' : '<small>your cards stay on this device</small>'}</button>
+  draggable ? '' : '<small>your cards stay in this browser profile</small>'}</button>
       <input type="file" accept=".keep.yml,.keep,.apkg,.colpkg,application/zip,text/yaml" hidden id="imp-input">
       <button type="button" class="imp-mine" id="imp-mine">write your own cards<small>a deck of
         your own, made by its first card</small></button>
@@ -408,15 +408,13 @@ export function openImporter() {
         'keep club is part-way through an update. Reload the page and try again.');
       return;
     }
-    /* Said before the boxes rather than found out later, and said exactly: the
-       backup file in a deck's settings holds what you have answered and
-       the cards you add to the deck, and no file anywhere holds the deck
-       itself. Offering it as the way to move one would be this screen making a
-       promise the app does not keep — and the promise somebody would rely on
-       just before removing the deck. */
+    /* Said before the boxes rather than found out later, and with the two files
+       kept distinct: Deck file carries the cards; Backup can restore history,
+       notes and edits only into this exact local copy. */
     body.innerHTML = `<p class="imp-sub">A deck is made by its first card, so this asks for
-      both. A deck you write stays on this device: it does not sync, and no backup file holds
-      the deck itself, so what you write here is written nowhere else.</p>`;
+      both. A deck you write stays in this browser profile and does not Sync. After creating
+      it, use Settings → Deck file to export the cards themselves. Backup separately protects
+      review history, notes, and edits for this exact local copy.</p>`;
     body.appendChild(sheet);
     const form = body.querySelector('#byo-card-form');
     // Above the two boxes, because the deck is the thing being made and the
@@ -552,7 +550,7 @@ export function openImporter() {
    * this is the only screen there is to say where that lives. */
   function made(id, title) {
     body.innerHTML = `<h2 class="imp-h" tabindex="-1">${esc(title)}</h2>
-      <p class="imp-sub">one card, written to this device</p>
+      <p class="imp-sub">one card, written in this browser profile</p>
       <div class="imp-book">
         <h3>what happens now</h3><ul>
           <!-- No <b> anywhere but the empty leading one: .imp-book li.said b is
@@ -561,9 +559,10 @@ export function openImporter() {
                there. -->
           <li class="said"><b></b><span>Browse is where you write the next card, and every
             card after it — choose “New card” at the end of the list</span></li>
-          <li class="said"><b></b><span>a deck you wrote does not sync, and this device is
-            the only place it exists — Settings → export a backup keeps what you have
-            answered and the cards you add next, not the deck</span></li>
+          <li class="said"><b></b><span>a deck you wrote does not Sync — Settings → Deck file
+            exports the cards themselves so you can keep or move them</span></li>
+          <li class="said"><b></b><span>Backup separately protects review history, notes,
+            and edits for this exact local copy; it cannot move that history to a new copy</span></li>
           <li class="said"><b></b><span>removing it from the courses screen takes the deck,
             what you have answered and every card in it</span></li>
         </ul>
@@ -848,7 +847,7 @@ export function openImporter() {
         // The layer goes with the history, and only here. Its records are keyed
         // by the OLD deck's card ids, so what would be left of it over a deck of
         // different cards is edits that override nothing and cards written into
-        // a deck that is not on this device any more. The same replace onto the
+        // a deck that is not in this browser profile any more. The same replace onto the
         // same deck keeps both, which is the whole point of an override
         // surviving a course update. The line above the button says which of
         // the two this one is before it is pressed.
@@ -858,9 +857,9 @@ export function openImporter() {
         saving = false;
         x.disabled = false;
         fail('the deck was replaced, but its old progress could not be cleared',
-          'device storage is blocked. Reload, then use Settings → erase all progress before studying it.'
+          'browser storage is blocked. Reload, then use Settings → erase all progress before studying it.'
           + (replacing.written
-            ? ' The cards you wrote into the old deck are still on this device too, to keep or to delete.'
+            ? ' The cards you wrote into the old deck are still in this browser profile too, to keep or to delete.'
             : ''));
         return;
       }

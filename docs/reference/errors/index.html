@@ -12,6 +12,7 @@
     .diagnostics { margin: 0; }
     .diagnostics > div { padding: 1rem 0; border-bottom: 1px solid var(--line); scroll-margin-top: 6rem; }
     .diagnostics dt { font-weight: 600; }
+    .diagnostics dt code { overflow-wrap: anywhere; }
     .diagnostics dd { max-width: 76ch; margin: .35rem 0 0; color: var(--muted); }
   </style>
 </head>
@@ -23,14 +24,17 @@
         <img src="../../tower.svg" alt="" width="36" height="36">
         <span>keep club <small>course docs</small></span>
       </a>
-      <nav class="top-links" aria-label="External">
+      <nav class="top-links" aria-label="Documentation links">
         <a href="https://github.com/0xkkonrad/keepclub">source</a>
+        <a href="../../studying/">how studying works</a>
         <a href="https://keepclub.app/">open the app ↗</a>
       </nav>
     </div>
   </header>
   <div class="layout">
     <nav class="side" aria-label="Diagnostic groups">
+      <strong>Learners</strong>
+      <a href="../../studying/">How studying works</a>
       <strong>Course format 2</strong>
       <a href="../../">Creator guide</a>
       <a href="../../schema/course-v2.schema.json">JSON Schema ↧</a>
@@ -41,6 +45,18 @@
         <a href="#legacy-compatibility">Legacy compatibility</a>
     </nav>
     <main id="content">
+      <details class="mobile-nav">
+        <summary>Guides and this page</summary>
+        <nav aria-label="Mobile diagnostic reference">
+          <a href="../../studying/">Learner study guide</a>
+          <a href="../../">Creator guide</a>
+          <a href="../../schema/course-v2.schema.json">JSON Schema ↧</a>
+          <a href="#parse-and-shape-errors">Parse and shape errors</a>
+          <a href="#semantic-and-asset-errors">Semantic and asset errors</a>
+          <a href="#quality-warnings">Quality warnings</a>
+          <a href="#legacy-compatibility">Legacy compatibility</a>
+        </nav>
+      </details>
       <p class="eyebrow">Reference · stable API</p>
       <h1>Diagnostic codes</h1>
       <p class="lede">Tools can rely on each code, its severity, data path,

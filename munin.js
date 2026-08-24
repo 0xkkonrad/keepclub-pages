@@ -1959,12 +1959,18 @@ async function renderShelf(asOverlay, say) {
          slowly. <b>Good</b> means you knew it. <b>Easy</b> means it was obvious.
          Be honest — the app uses your answer to decide when to show the card
          next, so flattering yourself just means seeing it less.</p>
-      <p>Cards you find hard come back within minutes. Cards you know come back
-         in days, then weeks. That is the whole trick: you spend your time on
-         the material you have not learned yet.</p>
-      <p>Progress starts in this browser. Built-in courses only share it if
-         you turn on Sync; imported decks always stay here. Export a backup
-         from Settings before you change phone.</p>
+      <p>New and missed cards can return later in the same session. Once a card
+         has left that learning loop, Hard holds the gap printed on its button;
+         Good and Easy usually make it longer. An exam ceiling can hold several
+         choices to the same earlier date.</p>
+      <p>Progress starts in this browser profile. Built-in courses only share it
+         if you turn on Sync; one key then covers every built-in course using it.</p>
+      <p>Imported decks and their review history stay in this exact browser
+         profile. Their backup can restore only while the same local deck still
+         exists here, so it cannot move that history to another browser or phone.
+         Keep the original <code>.apkg</code> or course file.</p>
+      <p><a href="docs/studying/" target="_blank" rel="noopener">Read the full
+         guide to grades, scheduling, exam mode, and progress</a>.</p>
     </details>
       <p class="shelf-note">${asOverlay ? ''
     : 'pick a course — it opens straight here next time'}</p>
@@ -2002,9 +2008,13 @@ async function renderShelf(asOverlay, say) {
   const historyToken = asOverlay
     ? Date.now().toString(36) + Math.random().toString(36).slice(2) : '';
   const focusable = () => [...el.querySelectorAll(
-    'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]),'
+    'button:not([disabled]), a[href], summary, input:not([disabled]):not([type="hidden"]),'
       + ' [tabindex]:not([tabindex="-1"])'
-  )].filter((node) => !node.hidden && !node.inert && node.getClientRects().length);
+  )].filter((node) => {
+    const closed = node.closest('details:not([open])');
+    return !node.hidden && !node.inert && node.getClientRects().length
+      && (!closed || node.tagName === 'SUMMARY');
+  });
   const modalKeys = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -2497,7 +2507,7 @@ addEventListener('popstate', () => {
    * it, from a name nobody has ever heard of. The shelf says it, the way it
    * already says a registry would not answer. */
   const missing = (id) => (isLocal(id)
-    ? 'that deck is not on this device any more'
+    ? 'that deck is not in this browser profile any more'
     : 'that course is not here');
 
   if (target && known(target)) {
