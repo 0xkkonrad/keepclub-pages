@@ -4259,6 +4259,19 @@ function sheetCard() {
   return byId.get(cardSheet.cardId) || shippedCard(cardSheet.cardId);
 }
 
+/** Context for email, never the card, progress, storage, or imported identity. */
+function courseFeedbackHref(surface, cardId) {
+  const builtIn = !COURSE.deck && MUNIN.idOk(COURSE.id);
+  const shipped = builtIn && cardId && shippedById.has(cardId) ? cardId : '';
+  return MUNIN.feedbackHref({
+    surface,
+    courseId: builtIn ? COURSE.id : '',
+    imported: !builtIn,
+    cardId: shipped,
+    deckBuild: builtIn && DECK ? DECK.buildFingerprint : '',
+  });
+}
+
 /** Everything about the sheet that is read off state rather than typed into it.
  *
  * Never the two textareas. This also runs when another tab writes the layer
@@ -4271,6 +4284,9 @@ function renderCardSheet() {
   const record = editing ? cardRecord(cardSheet.cardId) : null;
   const gone = editing && !sheetCard();
   $('#card-sheet-h').textContent = editing ? 'Edit card' : 'New card';
+  const feedback = $('#card-feedback');
+  feedback.hidden = !editing;
+  if (editing) feedback.href = courseFeedbackHref('card', cardSheet.cardId);
   // One verb for one action. The trigger, the title and this button used to be
   // three names for the same object — you tapped "fix card", landed on "edit
   // card" and were offered "save card" — and a beat went on checking you had
@@ -6388,6 +6404,7 @@ function renderSetup() {
   // colour you were already in. The row is re-read from the theme, not from
   // whatever it was showing the last time it was opened.
   applyTheme();
+  $('#settings-feedback').href = courseFeedbackHref('settings');
   $('#set-new').value = state.settings.newPerDay;
   $('#set-max').value = state.settings.maxRev;
   $('#set-shuffle').checked = state.settings.shuffle;

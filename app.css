@@ -385,6 +385,7 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
   background: none; border: 0; border-radius: var(--r-sm);
   color: var(--muted); font-size: 1.1rem; line-height: 1;
 }
+.feedback-btn { text-decoration: none; cursor: pointer; }
 /* The theme toggle is a drawing now, not a character, so it needs a box —
    font-size no longer sizes it. Three selectors' worth of weight on purpose:
    the shelf's own CSS is injected at runtime, after this file, and its
@@ -1851,6 +1852,13 @@ mark {
    and on Progress. Only the spacing changes: inside a sheet the first group
    must not push a 24px gap under the title bar. */
 #setup .sheet-card { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.setup-feedback {
+  min-height: var(--tap); margin-top: 10px; padding: 12px 2px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border-top: 2px dotted var(--line); border-bottom: 2px dotted var(--line);
+  color: inherit; font-size: .88rem; text-decoration: none; text-transform: lowercase;
+}
+.setup-feedback + .setup-g:first-of-type { margin-top: 0; border-top: 0; }
 .setup-g { margin-top: 0; }
 .setup-g:first-of-type { margin-top: 10px; }
 .setup-g:last-of-type { border-bottom: 2px dotted var(--line); }

@@ -20,6 +20,38 @@
  */
 'use strict';
 
+const FEEDBACK_TO = 'konrad+keepclub@peanut.me';
+const FEEDBACK_SURFACES = Object.freeze({
+  courses: 'courses',
+  settings: 'settings',
+  card: 'edit card',
+});
+
+/** A native-email handoff with a closed diagnostic allowlist. */
+function feedbackHref(options) {
+  const input = options && typeof options === 'object' ? options : {};
+  const surface = Object.hasOwn(FEEDBACK_SURFACES, input.surface)
+    ? input.surface : 'settings';
+  const courseId = typeof input.courseId === 'string'
+    && /^[a-z0-9][a-z0-9-]{0,63}$/.test(input.courseId)
+    && !/^local-[a-z0-9]+$/.test(input.courseId) ? input.courseId : '';
+  const cardId = courseId && typeof input.cardId === 'string'
+    && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(input.cardId)
+    && !input.cardId.startsWith('u.') ? input.cardId : '';
+  const deckBuild = courseId && typeof input.deckBuild === 'string'
+    && /^[a-z0-9._-]{1,64}$/i.test(input.deckBuild) ? input.deckBuild : '';
+  const subject = surface === 'card'
+    ? `[keep club] card problem${courseId ? ` · ${courseId}` : ''}`
+    : '[keep club] feedback';
+  const body = ['What happened?', '', '', '—', `Screen: ${FEEDBACK_SURFACES[surface]}`];
+  if (courseId) body.push(`Course: ${courseId}`);
+  else if (input.imported === true) body.push('Course: imported');
+  if (cardId) body.push(`Card: ${cardId}`);
+  if (deckBuild) body.push(`Deck build: ${deckBuild}`);
+  return `mailto:${FEEDBACK_TO}?subject=${encodeURIComponent(subject)}`
+    + `&body=${encodeURIComponent(body.join('\n'))}`;
+}
+
 const MUNIN = {
   lastKey: 'munin/last-course',
   /* Every place that names a storage slot names it here. These templates used
@@ -36,6 +68,7 @@ const MUNIN = {
   cardsKey: (id) => 'munin/' + id + '/cards/v1',
   bootKey: (id) => 'munin/boot/' + id,
   registry: 'courses/index.json',
+  feedbackHref,
 
   /* A course id is a folder name and goes straight into a URL, so it is
    * checked as a shape rather than against a list: the resume path must not
@@ -1368,7 +1401,7 @@ async function mountReceipt(rec) {
 const SHELF_CSS = `
   /* Both insets, the way .top and .lb-bar take them: this panel is pinned to
      the physical edges of the screen, so on a notched phone in standalone the
-     wordmark and the theme button sat under the status bar. */
+     wordmark and its utility sat under the status bar. */
   .shelf { position: fixed; inset: 0; z-index: 90; overflow-y: auto;
     background: var(--bg); color: var(--text);
     padding: calc(28px + env(safe-area-inset-top)) 20px
@@ -1380,7 +1413,7 @@ const SHELF_CSS = `
   .shelf-mark h1 { font-size: 1.3rem; font-weight: 500; letter-spacing: -.02em;
     margin: 0; text-transform: lowercase; }
   .shelf-mark .icon-btn { margin-left: auto; }
-  /* The overlay's way out sits beside the theme button, not away from it. */
+  /* The overlay's way out sits beside Help, not away from it. */
   .shelf-mark .shelf-x { margin-left: 0; }
   .shelf-intro { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; }
   .shelf-sub { flex: 1; color: var(--muted); font-size: .84rem; margin: 0; }
@@ -1848,6 +1881,13 @@ async function renderShelf(asOverlay, say) {
     lost = true;
   }
   const metas = await Promise.all(ids.map(courseMeta));
+  const feedbackCourse = asOverlay && globalThis.COURSE
+    && MUNIN.idOk(COURSE.id) && !isLocal(COURSE.id) ? COURSE.id : '';
+  const feedback = MUNIN.feedbackHref({
+    surface: 'courses',
+    courseId: feedbackCourse,
+    imported: !!(asOverlay && globalThis.COURSE && isLocal(COURSE.id)),
+  });
 
   // Imported decks, if the browser will tell us about them. A database that
   // will not open is not a reason for the shelf to fail to draw — and `null`
@@ -1881,8 +1921,8 @@ async function renderShelf(asOverlay, say) {
   }
   el.innerHTML = `<div class="shelf-inner">
     <div class="shelf-mark">${muninDoodle('tower')}<h1>keep club</h1>
-      <button type="button" class="icon-btn" id="shelf-theme" aria-label="Switch colour theme"
-        title="Switch colour theme"><span aria-hidden="true" data-theme-glyph></span></button>
+      <a class="icon-btn feedback-btn" id="shelf-feedback" href="${escHtml(feedback)}"
+        aria-label="Email feedback"><span aria-hidden="true">?</span></a>
       ${asOverlay ? `<button type="button" class="icon-btn shelf-x" id="shelf-x"
         aria-label="Close" title="Close">✕</button>` : ''}
     </div>
@@ -1941,7 +1981,6 @@ async function renderShelf(asOverlay, say) {
     main.tabIndex = -1;
     document.querySelector('.skip')?.setAttribute('href', '#shelf-main');
   }
-  el.querySelector('#shelf-theme').addEventListener('click', () => MuninTheme.cycle());
   // Only the cold picker carries it: mid-course there is a course to share, and
   // Done and Progress are where the app offers that.
   el.querySelector('#shelf-share')?.addEventListener('click', (e) =>
@@ -2010,13 +2049,8 @@ async function renderShelf(asOverlay, say) {
     addEventListener('keydown', modalKeys);
     el.querySelector('#shelf-x').addEventListener('click', () => closeOverlay(false));
     el.querySelector('#shelf-x').focus();
-    // Dismiss by clicking the backdrop, and only that. "Anything not inside the
-    // card" looked equivalent and was not: the theme button redraws its own
-    // glyph the moment it is pressed, so by the time the click reached here the
-    // thing that had been clicked was a detached <path> with no ancestors at
-    // all — and this panel tore itself off the page every time somebody changed
-    // the colour from it. The test is where the click landed, which is the same
-    // test the card sheet and the settings sheet use.
+    // Dismiss by clicking the backdrop, and only that. The test is where the
+    // click landed, which is the same test the card and settings sheets use.
     el.addEventListener('click', (e) => {
       if (e.target === el) closeOverlay();
     });
