@@ -1425,11 +1425,15 @@ const SHELF_CSS = `
   .shelf-share:active:not(:disabled) { box-shadow: none; transform: translate(2px, 2px); }
   .shelf-tiles { display: flex; flex-direction: column; gap: 14px; }
   .shelf-tile { display: flex; align-items: center; gap: 12px; text-align: left;
+    --tile-ink: var(--tile-accent, var(--stroke));
     background: var(--surface); color: inherit; font: inherit; cursor: pointer;
     border: var(--bw) solid var(--stroke); border-left-width: 6px;
-    border-left-color: var(--tile-accent, var(--stroke));
+    border-left-color: var(--tile-ink);
     border-radius: var(--r); box-shadow: var(--sh); padding: 14px 16px; min-height: var(--tap); }
-  .shelf-tile .dood { width: 34px; height: 34px; flex: none; color: var(--tile-accent, var(--text)); }
+  :root[data-theme="dark"] .shelf-tile {
+    --tile-ink: var(--tile-accent-dark, var(--tile-accent, var(--stroke)));
+  }
+  .shelf-tile .dood { width: 34px; height: 34px; flex: none; color: var(--tile-ink); }
   .shelf-art-frame { position: relative; width: 34px; height: 34px; flex: none;
     display: grid; place-items: center; }
   .shelf-art-frame .dood, .shelf-art-frame img {
@@ -1644,7 +1648,7 @@ function tileArt(path) {
 
 function courseTile(c) {
   return `<button type="button" class="shelf-tile" data-course="${escHtml(c.id)}"
-      style="--tile-accent:${escHtml(c.accent.light)}">
+      style="--tile-accent:${escHtml(c.accent.light)};--tile-accent-dark:${escHtml(c.accent.dark)}">
     ${tileArt(c.shelfPath || MUNIN_DOODLE[MUNIN.theme.fallback])}
     <span><b>${escHtml(c.title)}</b><small>${escHtml(c.tagline || '')}</small></span>
   </button>`;
@@ -1725,7 +1729,7 @@ function localTile(d) {
   const cards = deckCards(d);
   return `<div class="shelf-row">
     <button type="button" class="shelf-tile" data-course="${escHtml(d.id)}"
-        style="--tile-accent:${escHtml(MUNIN.theme.accent.light)}">
+        style="--tile-accent:${escHtml(MUNIN.theme.accent.light)};--tile-accent-dark:${escHtml(MUNIN.theme.accent.dark)}">
       ${emblem}
       <span><b>${escHtml(d.title)}</b><small>your deck · ${cards.toLocaleString('en-GB')
       } ${cards === 1 ? 'card' : 'cards'} · ${
