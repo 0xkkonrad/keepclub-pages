@@ -1,0 +1,14 @@
+/* sailing-in-german — how its loading screen moves. Its own keyframes: the animation
+ * vocabulary belongs to the course, not to Munin's stylesheet, or a course
+ * could only ever pick from the two names app.css happened to declare. */
+.boot-sailing-in-german { width: 52px; height: 52px; color: var(--accent);
+  animation: boot-sailing-in-german-move 2.2s ease-in-out infinite; }
+.boot-sailing-in-german path { stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: boot-sailing-in-german-draw 1.5s ease-out forwards; }
+@keyframes boot-sailing-in-german-draw { to { stroke-dashoffset: 0; } }
+@keyframes boot-sailing-in-german-move { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+/* Reduced motion leaves the drawing finished, not half-drawn. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-sailing-in-german, .boot-sailing-in-german path { animation: none; }
+  .boot-sailing-in-german path { stroke-dashoffset: 0; }
+}

@@ -1,0 +1,41 @@
+/* The figure vocabulary of this course's drawings.
+ *
+ * Munin's stylesheet carries the figure LANGUAGE — what a dash means, what a
+ * leader line is, what a swept arc is, the colour tokens — because those are
+ * true of any subject drawn this way. What is in here is this course's own
+ * nouns, and it used to live in app.css: fifty rules of one syllabus applied
+ * over every deck, including decks about German verbs.
+ *
+ * Most of these set nothing the base does not already set. They are kept
+ * because they are the hooks the drawings are built from — figures.py emits
+ * them — and a class with no rule is a class nobody can find. Where one does
+ * carry meaning, the meaning is noted.
+ *
+ * Loaded by munin.js when course.json has a `figures` block.
+ */
+
+/* Parts of the boat and her gear. */
+.figure .f-rig { stroke-width: 1.4; }
+.figure .f-side { stroke-width: 1.4; }
+.figure .f-edge { stroke-width: 1.4; }
+.figure .f-brace { stroke-width: 1.4; }
+.figure .f-boom { stroke-width: 1.4; }
+.figure .f-arm { stroke-width: 1.4; }
+.figure .f-walk { stroke-width: 1.4; }
+.figure .f-shore { stroke-width: 1.4; }
+.figure .f-pontoon { stroke-width: 1.4; }
+.figure .f-warp { stroke-width: 1.4; }
+
+/* Wind is the one thing on these drawings that is neither ink nor the boat,
+   and it takes the blue the figures reserve for water and weather. */
+.figure .f-wind { stroke: var(--fig-blu); stroke-width: 1.4; }
+/* A line made fast is rope rather than structure, so it steps back. */
+.figure .f-tie { stroke: var(--muted); stroke-width: 1.4; }
+/* Sail and fender are filled, not outlined: a sail read as an outline is a
+   hole in the drawing, and these are the two shapes with cloth in them. */
+.figure .f-sail { fill: var(--surface-2); }
+.figure .f-fender { stroke: var(--muted); stroke-width: 1.4; fill: var(--surface-2); }
+/* Jackstay and wash are dashed for the same reason a construction line is:
+   neither is a solid thing you could put your hand on. */
+.figure .f-jack { stroke-width: 1.4; stroke-dasharray: 10 5; }
+.figure .f-wash { stroke-width: 1.4; stroke-dasharray: 9 5; }
