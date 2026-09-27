@@ -1311,6 +1311,7 @@ function figureSVG(card, cls) {
   const def = FIGURES && card.figure && FIGURES[card.figure.figureId];
   if (!def) return '';
   return `<svg class="figure${cls ? ' ' + cls : ''}" viewBox="${def.vb}" role="img"`
+    + (def.lang ? ` lang="${escAttr(def.lang)}"` : '')
     + ` aria-label="${escAttr(figureAlt(card, def))}">${def.b}</svg>`;
 }
 
@@ -1418,8 +1419,9 @@ function renderCardFigure(card) {
    of everything drawn — the dimmed labels are context the eye skips. */
 function figureAlt(card, def) {
   const labels = card.figure.highlightedLabels;
-  const on = (labels && labels.length ? labels : def.l).map((s) => s.replace(/-/g, ' '));
-  return `${def.cap} Labelled: ${on.join(', ')}.`;
+  const on = (labels && labels.length ? labels : def.l)
+    .map((s) => def.labelNames?.[s] || s.replace(/-/g, ' '));
+  return `${def.cap} ${def.labelled || 'Labelled'}: ${on.join(', ')}.`;
 }
 
 function escAttr(s) {

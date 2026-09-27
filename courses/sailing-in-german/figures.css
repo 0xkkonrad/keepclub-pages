@@ -39,3 +39,15 @@
    neither is a solid thing you could put your hand on. */
 .figure .f-jack { stroke-width: 1.4; stroke-dasharray: 10 5; }
 .figure .f-wash { stroke-width: 1.4; stroke-dasharray: 9 5; }
+
+/* These rotations use SVG coordinates; the shell's fill-box origin would
+   rotate the height labels outside their drawing. */
+.figure[lang="de"] text[transform] {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+/* Rigging legends explain both colours on every card. */
+.figure[lang="de"] text.f-note:not([data-l]) {
+  opacity: 1;
+}
