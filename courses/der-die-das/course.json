@@ -1,0 +1,15 @@
+{
+ "id": "der-die-das",
+ "title": "Der Die Das",
+ "short": "Der Die Das",
+ "tagline": "1.000 Wörter · fünf Stufen · welcher Artikel?",
+ "accent": {
+  "light": "#6e4696",
+  "dark": "#cfb1ef",
+  "inkLight": "#ffffff",
+  "inkDark": "#21142e"
+ },
+ "exam": false,
+ "boot": { "line": "Der, die oder das?" },
+ "notice": "Gesucht ist der bestimmte Artikel im Nominativ Singular zur angegebenen Bedeutung. Bei mehreren angegebenen Artikeln zählt jeder als richtig; regionale oder seltene Varianten sind erläutert. Beginner → Intermediate → Advanced → Expert → Duden: je 200 Karten. Die Stufen sind redaktionell gewählt. Duden bezeichnet hier die schwerste Stufe; kein offizieller Duden-Kurs."
+}
